@@ -70,13 +70,18 @@ installed:
     why: "32-bit debugger (release/x32/x32dbg.exe) for hardware write watchpoints: find the car spawn function, where the model is bound. release/x32/headless.exe is a console front-end for scripted attach."
     license: "GPLv3"
 
-recommended:
   - id: ghidra
     role: decompiler
-    version: "11.x"
-    url: "https://github.com/NationalSecurityAgency/ghidra/releases"
-    why: "Decompile speed2.exe around the anchors; find the player car pointer chain and the event launcher."
+    version: "12.2 PUBLIC 20261016"
+    url: "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip"
+    sha256: "2C2CD776DB3C1F6A097BA418922378AC3649CADD5E844A6F5F088AE628A7BE67"
+    size_mb: 543
+    install_path: "toolchain/tools/ghidra_12.2_PUBLIC"
+    why: "Decompiles speed2.exe into one .c file plus an address/name index (tools/ghidra_scripts/DecompileAll.java via support/analyzeHeadless.bat) to find the car spawn and model-load path."
     license: "Apache-2.0"
+
+recommended:
+
 
   - id: cheat-engine
     role: memory scanner

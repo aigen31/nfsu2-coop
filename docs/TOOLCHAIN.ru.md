@@ -31,6 +31,7 @@ Get-Content toolchain\INSTALLED.json
 
 | Инструмент | Роль | Зачем именно здесь |
 |---|---|---|
+| **Ghidra 12.2** (уже установлен) | декомпилятор | `toolchain\tools\ghidra_12.2_PUBLIC\support\analyzeHeadless.bat` + `tools\ghidra_scripts\DecompileAll.java` → один `all.c` и `index.tsv` в `build\decomp` |
 | **x64dbg** (уже установлен) | отладчик | `toolchain\tools\x64dbg\release\x32\x32dbg.exe`; hardware-watchpoint на запись в `[0x89CCF8]` находит функцию спавна машины, где привязывается модель |
 | **Ghidra 11.x** | декомпилятор | разобрать `speed2.exe` вокруг якорей, найти цепочку указателя машины и запуск события |
 | **x64dbg** (32-бит) | отладчик | breakpoint на `Player::ClearZone` (0x5FFE70), `this` → объект машины |
@@ -60,4 +61,5 @@ python -c "import yaml, pefile, pytest; print('ok')"
    (скачивание → проверка хэша → распаковка).
 3. Если это ручная установка — в `recommended`, с официальной ссылкой.
 4. Никаких `curl | sh`: только скачать файл, проверить SHA-256, распаковать.
+
 
