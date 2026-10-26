@@ -30,6 +30,8 @@ std::vector<PuppetTarget> g_puppets;
 struct SavedCar {
     u32 car = 0;
     u32 ri = 0;  // CarRenderInfo seen for this car this frame
+    u32 riCar = 0;  // original [ri] (the car object pointer) when cloned
+    bool cloned = false;
     bool valid = false;
     f32 pos[3] = {};
     f32 pos2[3] = {};
@@ -61,6 +63,8 @@ constexpr int kModelFieldCount = 8;
 u32 g_savedModel[kMaxPuppets][kModelFieldCount] = {};
 bool g_modelSwap = false;
 bool g_modelSwapCfg = false;
+bool g_cloneMode = false;
+u32 g_clone = 0;  // our copy of the local car object
 volatile long g_renderCalls = 0;
 
 void write32(u8*& p, std::uint32_t v) { std::memcpy(p, &v, 4); p += 4; }
@@ -132,6 +136,24 @@ void dumpRI(const char* tag, u32 ri) {
 void applyPuppet(int slot, const PuppetTarget& t, u32 ri) {
     SavedCar& s = g_saved[slot];
     s.ri = ri;
+    s.cloned = false;
+    if (g_cloneMode && g_localCar && g_clone) {
+        // Point the game at OUR copy of the local car object: same model and
+        // materials as the player, different position, and the live car object
+        // is never touched.
+        if (readMem(g_localCar, reinterpret_cast<void*>(static_cast<std::uintptr_t>(g_clone)), 0x1000)) {
+            f32 pos[3] = {t.pos.x, t.pos.y, t.pos.z};
+            const f32 c = std::cos(t.yaw), sn = std::sin(t.yaw);
+            f32 basis[12] = {c, -sn, 0, 0, sn, c, 0, 0, 0, 0, 1, 0};
+            writeMem(g_clone + 0x50, pos, sizeof(pos));
+            writeMem(g_clone + 0x60, pos, sizeof(pos));
+            writeMem(g_clone + 0x90, basis, sizeof(basis));
+            if (readMem(ri, &s.riCar, sizeof(u32))) {
+                u32 clone = g_clone;
+                if (writeMem(ri, &clone, sizeof(clone))) s.cloned = true;
+            }
+        }
+    }
     g_riSaved[slot].clear();
     if (!g_swapOffsets.empty() && g_localRI && ri) {
         for (u32 off : g_swapOffsets) {
@@ -222,6 +244,12 @@ bool CarRenderer::install(u32 renderVa, bool modelSwap) {
     g_jump = reinterpret_cast<std::uintptr_t>(g_trampoline);
     g_modelSwap = g_modelSwapCfg || std::getenv("NFSU2_COOP_MODEL_SWAP") != nullptr;
     g_dumpWanted = std::getenv("NFSU2_COOP_DUMP") != nullptr;
+    g_cloneMode = std::getenv("NFSU2_COOP_CLONE") != nullptr;
+    if (g_cloneMode && !g_clone) {
+        g_clone = static_cast<u32>(reinterpret_cast<std::uintptr_t>(
+            VirtualAlloc(nullptr, 0x2000, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE)));
+        NFC_INFO("render: clone mode, buffer %08X", g_clone);
+    }
     if (const char* sw = std::getenv("NFSU2_COOP_SWAP")) {
         std::string s(sw);
         std::size_t pos = 0;
@@ -286,6 +314,7 @@ void CarRenderer::restorePuppets() {
             for (int f = 0; f < kModelFieldCount; ++f)
                 writeMem(s.car + kModelFields[f], &g_savedModel[i][f], sizeof(u32));
         }
+        if (s.cloned) writeMem(s.ri, &s.riCar, sizeof(u32));
         for (const RISave& sv : g_riSaved[i]) writeMem(s.ri + sv.off, &sv.val, sizeof(u32));
         g_riSaved[i].clear();
         s.valid = false;
@@ -298,6 +327,8 @@ void CarRenderer::clear() {
 }
 
 }  // namespace nfc
+
+
 
 
 
