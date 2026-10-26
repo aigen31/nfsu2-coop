@@ -61,6 +61,7 @@ std::vector<RISave> g_riSaved[kMaxPuppets];
 constexpr u32 kModelFields[] = {0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C, 0x20, 0x2C};
 constexpr int kModelFieldCount = 9;
 u32 g_savedModel[kMaxPuppets][kModelFieldCount] = {};
+
 bool g_modelSwap = false;
 bool g_modelSwapCfg = false;
 bool g_cloneMode = false;
@@ -309,7 +310,29 @@ void CarRenderer::setTargets(u32 localCarPointer, const std::vector<PuppetTarget
     }
 }
 
+// Model swap that works: FUN_0063A5A0(car, model) mallocs the 0x2EC0-byte render
+// object, builds it from the model and refreshes the draw batches. Calling it once
+// per borrowed car with the local player's model gives the borrowed car the player's
+// body instead of a traffic one.
+constexpr std::uintptr_t kReloadModelVa = 0x0063A5A0;
+u32 g_reloadedCar[kMaxPuppets] = {};
+u32 g_reloadedModel[kMaxPuppets] = {};
+
+void reloadPuppetModel(int slot, u32 car) {
+    if (!g_modelSwap || !g_localCar || !car) return;
+    std::uint32_t desc = 0, model = 0;
+    if (!readMem(g_localCar + 0x554, &desc, sizeof(desc)) || !desc) return;
+    if (!readMem(desc + 0x04, &model, sizeof(model)) || !model) return;
+    if (g_reloadedCar[slot] == car && g_reloadedModel[slot] == model) return;
+    using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
+    reinterpret_cast<ReloadFn>(kReloadModelVa)(reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)), model);
+    g_reloadedCar[slot] = car;
+    g_reloadedModel[slot] = model;
+    NFC_INFO("render: reloaded model %08X on car %08X (slot %d)", model, car, slot);
+}
+
 void CarRenderer::restorePuppets() {
+    for (int i = 0; i < static_cast<int>(g_puppets.size()) && i < kMaxPuppets; ++i) reloadPuppetModel(i, g_puppets[i].carPointer);
     std::lock_guard<std::mutex> lock(g_mutex);
     for (int i = 0; i < kMaxPuppets; ++i) {
         SavedCar& s = g_saved[i];

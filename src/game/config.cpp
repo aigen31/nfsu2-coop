@@ -132,7 +132,7 @@ bool loadConfig(const std::string& path, GameConfig& out) {
     out.eventId = static_cast<u16>(ini.getInt("coop", "eventid", 1));
     out.publishTraffic = ini.getBool("game", "publishtraffic", true);
     out.drawRemoteCars = ini.getBool("game", "drawremotecars", true);
-    out.modelSwap = ini.getBool("game", "modelswap", false);
+    out.modelSwap = ini.getBool("game", "modelswap", true);
     out.bridgePort = static_cast<u16>(ini.getInt("debug", "bridgeport", 0));
     out.snapshotHz = static_cast<u32>(ini.getInt("game", "snapshothz", kSnapshotHz));
     out.countdownMs = static_cast<u32>(ini.getInt("game", "countdownms", kCountdownMs));

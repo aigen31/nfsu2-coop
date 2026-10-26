@@ -142,6 +142,31 @@ bool Bridge::start(std::uint16_t port) {
         if (!writeMem(addr, bytes.data(), bytes.size())) throw coopbridge::Error(-32011, "unwritable address");
         return coopbridge::json::Value(true);
     });
+    // Rebuild a car's model/render object with another model. FUN_0063a5a0(car, model)
+    // mallocs 0x2EC0 bytes, builds the model via FUN_00638190(model, car) and refreshes
+    // the draw batches (see build/decomp/all.c). Runs on the main thread via Pump().
+    g_server.Register("car.reload", [](const coopbridge::json::Value& p) {
+        const std::uint32_t slot = static_cast<std::uint32_t>(p.get("slot").asInt(1));
+        std::uint32_t car = 0;
+        if (!readMem(0x89CCF8 + slot * 4, &car, sizeof(car)) || !car)
+            throw coopbridge::Error(-32013, "no car in that slot");
+        std::uint32_t model = 0;
+        std::uint32_t local = 0;
+        std::uint32_t desc = 0;
+        if (readMem(0x89CCF8, &local, sizeof(local)) && local && readMem(local + 0x554, &desc, sizeof(desc)) && desc)
+            readMem(desc + 0x04, &model, sizeof(model));
+        const auto override = p.get("model").asInt(0);
+        if (override) model = static_cast<std::uint32_t>(override);
+        if (!model) throw coopbridge::Error(-32015, "no model to apply");
+        using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
+        auto fn = reinterpret_cast<ReloadFn>(static_cast<std::uintptr_t>(0x0063a5a0));
+        fn(reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)), model);
+        auto r = coopbridge::json::Value::object();
+        r.set("car", static_cast<std::int64_t>(car));
+        r.set("model", static_cast<std::int64_t>(model));
+        return r;
+    });
+
     g_server.Register("car.slots", [](const coopbridge::json::Value&) { return slotList(); });
     g_server.Register("car.name", [](const coopbridge::json::Value& p) {
         std::uint32_t car = static_cast<std::uint32_t>(p.get("car").asInt());

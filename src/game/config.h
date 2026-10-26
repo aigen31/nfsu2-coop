@@ -18,7 +18,7 @@ struct GameConfig {
     bool overlay = true;
     bool publishTraffic = true;
     bool drawRemoteCars = true;
-    bool modelSwap = false;
+    bool modelSwap = true;
     std::uint16_t bridgePort = 0;
     u32 snapshotHz = kSnapshotHz;
     u32 countdownMs = kCountdownMs;
