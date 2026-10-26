@@ -239,7 +239,45 @@ CarRenderer& CarRenderer::instance() {
     return r;
 }
 
+// The game itself tells us each car's model: hook the render-object builder and
+// remember the model argument it was called with. That value is the real per-model
+// id; reading desc+0x04 guesses wrong for player cars.
+using BuildFn = void(__thiscall*)(void*, std::uint32_t);
+BuildFn g_origBuild = nullptr;
+BuildFn g_buildHook = nullptr;
+
+struct CarModel {
+    u32 car;
+    u32 model;
+};
+CarModel g_carModels[64];
+volatile long g_carModelCount = 0;
+
+void __thiscall detourBuild(void* car, std::uint32_t model) {
+    const u32 carPtr = static_cast<u32>(reinterpret_cast<std::uintptr_t>(car));
+    bool known = false;
+    for (long i = 0; i < g_carModelCount && i < 64; ++i)
+        if (g_carModels[i].car == carPtr) {
+            g_carModels[i].model = model;
+            known = true;
+            break;
+        }
+    if (!known && g_carModelCount < 64) {
+        g_carModels[g_carModelCount].car = carPtr;
+        g_carModels[g_carModelCount].model = model;
+        InterlockedIncrement(&g_carModelCount);
+        NFC_INFO("render: car %08X built with model %08X", carPtr, model);
+    }
+    if (g_origBuild) g_origBuild(car, model);
+}
+
 bool CarRenderer::install(u32 renderVa, bool modelSwap) {
+    if (MH_CreateHook(reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(0x0063A5A0)),
+                      reinterpret_cast<LPVOID>(&detourBuild), reinterpret_cast<LPVOID*>(&g_origBuild)) == MH_OK &&
+        MH_EnableHook(reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(0x0063A5A0))) == MH_OK)
+        NFC_INFO("render: model builder hooked");
+    else
+        NFC_WARN("render: model builder hook failed");
     g_modelSwapCfg = modelSwap;
     if (installed_) return true;
     if (!renderVa) return false;
