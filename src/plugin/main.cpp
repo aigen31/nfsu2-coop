@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -17,6 +18,7 @@
 #include "game/config.h"
 #include "game/nfsu2_bindings.h"
 #include "game/overlay.h"
+#include "game/render_cars.h"
 
 using nfc::u32;
 using nfc::i32;
@@ -143,9 +145,47 @@ nfc::HudState buildHud(u32 now) {
     return hud;
 }
 
+void updateRenderTargets() {
+    nfc::CarRenderer& renderer = nfc::CarRenderer::instance();
+    if (!renderer.ready()) return;
+    std::vector<nfc::PuppetTarget> puppets;
+    nfc::World* w = world();
+    if (w && w->localSlot != nfc::kNoPlayer && g_game) {
+        int slot = 0;
+        for (int i = 0; i < nfc::kMaxPlayers; ++i) {
+            if (i == w->localSlot || !w->players[i].connected) continue;
+            const nfc::Entity* e = w->find(w->players[i].carId);
+            if (!e || !e->active) continue;
+            const u32 car = g_game->carAt(1 + slot);  // entry 0 is the local car
+            if (car) {
+                nfc::PuppetTarget t;
+                t.carPointer = car;
+                t.pos = e->st.pos;
+                t.yaw = e->st.yaw;
+                puppets.push_back(t);
+            }
+            ++slot;
+            if (slot >= 3) break;
+        }
+    }
+    // Visual smoke test: put the borrowed car right in front of the local car,
+    // so a screenshot proves the render path without driving to the other player.
+    if (std::getenv("NFSU2_COOP_PUPPET_FRONT") && !puppets.empty() && w && w->localSlot != nfc::kNoPlayer) {
+        const nfc::Entity* me = w->find(w->players[w->localSlot].carId);
+        if (me) {
+            puppets[0].pos.x = me->st.pos.x + std::sin(me->st.yaw) * 7.0f;
+            puppets[0].pos.y = me->st.pos.y + std::cos(me->st.yaw) * 7.0f;
+            puppets[0].pos.z = me->st.pos.z;
+            puppets[0].yaw = me->st.yaw;
+        }
+    }
+    renderer.setTargets(g_game ? g_game->carPointer() : 0, puppets);
+}
+
 void tickOnce(u32 now) {
     if (g_host) g_host->tick(now);
     if (g_client) g_client->tick(now);
+    updateRenderTargets();
 
     if (keyPressed(VK_F5)) {
         if (g_host)
@@ -206,6 +246,10 @@ DWORD WINAPI tickThread(LPVOID) {
         overlay.init();
         overlay.setGameThreadHook([] { g_game->pumpGameThread(); });
     }
+    if (g_cfg.drawRemoteCars && g_game->bound()) {
+        if (!nfc::CarRenderer::instance().install(g_game->renderVa()))
+            NFC_WARN("renderer: not installed, remote cars will not be drawn");
+    }
 
     nfc::SessionConfig sc;
     sc.hostMode = g_cfg.host;
@@ -252,6 +296,7 @@ DWORD WINAPI tickThread(LPVOID) {
 
     if (g_host) g_host->stop();
     if (g_client) g_client->stop();
+    nfc::CarRenderer::instance().shutdown();
     overlay.shutdown();
     g_game->shutdown();
     nfc::logClose();
@@ -275,6 +320,9 @@ BOOL WINAPI DllMain(HMODULE module, DWORD reason, LPVOID) {
     }
     return TRUE;
 }
+
+
+
 
 
 

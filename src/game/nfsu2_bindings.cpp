@@ -107,9 +107,20 @@ bool Nfsu2Game::readLocalCar(CarState& out) {
         if (safeRead(car + b_.gearOffset, &gear, sizeof(gear))) st.gear = gear;
     }
     if (!st.sane()) return false;
+    lastCarPtr_ = static_cast<u32>(reinterpret_cast<std::uintptr_t>(car));
     out = st;
     return true;
 }
+
+u32 Nfsu2Game::carAt(u32 index) const {
+    if (!b_.carArray) return 0;
+    u32 car = 0;
+    const u32 slot = b_.carArray + index * b_.carStride;
+    if (!safeRead(at(slot), &car, sizeof(car))) return 0;
+    return car;
+}
+
+u32 Nfsu2Game::renderVa() const { return static_cast<u32>(reinterpret_cast<std::uintptr_t>(module_)) + (0x620AE0u - 0x400000u); }
 
 u32 Nfsu2Game::zoneId() const {
     if (!b_.zonePointer) return 1;
@@ -233,6 +244,8 @@ void Nfsu2Game::pumpGameThread() {
 }
 
 }  // namespace nfc
+
+
 
 
 

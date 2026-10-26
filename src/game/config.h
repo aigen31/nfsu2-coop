@@ -17,6 +17,7 @@ struct GameConfig {
     u16 eventId = 1;
     bool overlay = true;
     bool publishTraffic = true;
+    bool drawRemoteCars = true;
     u32 snapshotHz = kSnapshotHz;
     u32 countdownMs = kCountdownMs;
     u32 maxTraffic = 20;
@@ -77,5 +78,6 @@ struct GameBindings {
 bool loadBindings(const std::string& path, GameBindings& out);
 
 }  // namespace nfc
+
 
 

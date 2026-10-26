@@ -69,6 +69,7 @@ add_library(NFSU2Coop SHARED
     src/game/nfsu2_bindings.cpp
     src/game/scanner.cpp
     src/game/overlay.cpp
+    src/game/render_cars.cpp
     ${IMGUI_SOURCES}
     ${MINHOOK_SOURCES})
 
@@ -88,3 +89,4 @@ set_target_properties(NFSU2Coop PROPERTIES
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(WARNING "NFSU2Coop must be built for x86 (use -A Win32 or an i686 toolchain).")
 endif()
+

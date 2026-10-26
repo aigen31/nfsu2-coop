@@ -123,6 +123,7 @@ if ($Targets -contains 'plugin') {
         (Join-Path $root 'src\game\nfsu2_bindings.cpp'),
         (Join-Path $root 'src\game\scanner.cpp'),
         (Join-Path $root 'src\game\overlay.cpp'),
+        (Join-Path $root 'src\game\render_cars.cpp'),
         (Join-Path $root 'vendor\imgui\imgui.cpp'),
         (Join-Path $root 'vendor\imgui\imgui_draw.cpp'),
         (Join-Path $root 'vendor\imgui\imgui_tables.cpp'),
@@ -144,4 +145,5 @@ if ($Targets -contains 'plugin') {
 }
 
 Write-Host "done."
+
 

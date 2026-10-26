@@ -10,6 +10,7 @@
 #include "imgui_impl_dx9.h"
 
 #include "core/log.h"
+#include "game/render_cars.h"
 
 namespace nfc {
 namespace {
@@ -66,6 +67,9 @@ void drawPanel(const HudState& s) {
 }
 
 HRESULT __stdcall hookEndScene(IDirect3DDevice9* device) {
+    // The borrowed puppet cars were moved for this frame's draws; put them back
+    // before the simulation runs again.
+    CarRenderer::instance().restorePuppets();
     const HRESULT hr = g_endScene ? g_endScene(device) : D3D_OK;
     if (device) Overlay::instance().renderFrame(device);
     return hr;
@@ -224,4 +228,5 @@ void Overlay::renderFrame(void* devicePtr) {
 }
 
 }  // namespace nfc
+
 

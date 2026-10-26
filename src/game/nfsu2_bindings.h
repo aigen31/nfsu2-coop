@@ -41,6 +41,9 @@ public:
     void pumpGameThread();
 
     bool bound() const { return b_.carBound(); }
+    u32 carPointer() const { return lastCarPtr_; }
+    u32 carAt(u32 index) const;
+    u32 renderVa() const;
     bool trafficBound() const { return b_.trafficBound(); }
     const GameBindings& bindings() const { return b_; }
     const std::vector<std::string>& notices() const { return notices_; }
@@ -69,8 +72,11 @@ private:
     std::mutex queueMutex_;
     std::vector<std::function<void()>> pending_;
     u16 lastStartedEvent_ = 0xFFFF;
+    u32 lastCarPtr_ = 0;
     bool warnedUnbound_ = false;
     bool warnedStart_ = false;
 };
 
 }  // namespace nfc
+
+
