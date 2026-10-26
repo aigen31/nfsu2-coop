@@ -17,6 +17,7 @@ struct HudState {
     std::string careerLine;
     std::vector<std::string> players;
     std::vector<std::string> standings;
+    std::vector<std::string> remotes;
     std::vector<std::string> warnings;
     std::vector<std::string> notices;
     int puppets = 0;
@@ -24,3 +25,4 @@ struct HudState {
 };
 
 }  // namespace nfc
+

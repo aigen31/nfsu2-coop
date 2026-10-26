@@ -597,6 +597,14 @@ void HostSession::onPlayerState(const Peer& p, BitReader& r) {
     e.owner = p.slot;
     e.active = true;
     e.observe(st, nowMs_);
+    // Let the host's game adapter track the guest car too (puppet bookkeeping,
+    // and the future render path), not just the snapshots.
+    if (!e.spawnSent) {
+        e.spawnSent = true;
+        game_.onSpawn(p.carId, EKind::Player, e.model, st);
+    } else {
+        game_.onUpdate(p.carId, EKind::Player, st);
+    }
     PlayerInfo& pi = w_.players[p.slot];
     pi.loaded = true;
     pi.zoneId = zone;
@@ -1239,5 +1247,6 @@ std::string ClientSession::statusText() const {
 }
 
 }  // namespace nfc
+
 
 

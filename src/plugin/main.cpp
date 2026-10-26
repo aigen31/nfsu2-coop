@@ -4,6 +4,7 @@
 // thread that owns the session, hooks D3D9 for the HUD, and exposes five keys.
 #include <windows.h>
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -97,6 +98,27 @@ nfc::HudState buildHud(u32 now) {
         else
             line += "  cp " + std::to_string(r.p[i].checkpoint) + "/" + std::to_string(r.checkpointCount);
         hud.standings.push_back(line);
+    }
+    // Direction and distance to every other player, straight from the synced
+    // car positions: the simplest thing that makes co-op usable before the
+    // remote cars are drawn in the world.
+    if (w->localSlot != nfc::kNoPlayer) {
+        const nfc::Entity* mine = w->find(w->players[w->localSlot].carId);
+        if (mine) {
+            static const char* dirs[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+            for (int i = 0; i < nfc::kMaxPlayers; ++i) {
+                if (i == w->localSlot || !w->players[i].connected) continue;
+                const nfc::Entity* other = w->find(w->players[i].carId);
+                if (!other) continue;
+                const float dx = other->st.pos.x - mine->st.pos.x;
+                const float dz = other->st.pos.z - mine->st.pos.z;
+                const float d = std::sqrt(dx * dx + dz * dz);
+                const int b = static_cast<int>(std::floor((std::atan2(dx, dz) + 3.14159265f) / (3.14159265f / 4.0f) + 0.5f)) & 7;
+                char line[128];
+                std::snprintf(line, sizeof(line), "%s  %d m %s", w->players[i].name.c_str(), static_cast<int>(d), dirs[b]);
+                hud.remotes.push_back(line);
+            }
+        }
     }
     const std::string list = w->playerList();
     std::string cur;
@@ -253,5 +275,7 @@ BOOL WINAPI DllMain(HMODULE module, DWORD reason, LPVOID) {
     }
     return TRUE;
 }
+
+
 
 

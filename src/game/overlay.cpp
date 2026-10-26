@@ -38,6 +38,11 @@ void drawPanel(const HudState& s) {
         ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "standings");
         for (const std::string& line : s.standings) ImGui::TextUnformatted(line.c_str());
     }
+    if (!s.remotes.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "co-op players");
+        for (const std::string& line : s.remotes) ImGui::TextUnformatted(line.c_str());
+    }
     if (!s.players.empty()) {
         ImGui::Separator();
         ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "players");
@@ -219,3 +224,4 @@ void Overlay::renderFrame(void* devicePtr) {
 }
 
 }  // namespace nfc
+

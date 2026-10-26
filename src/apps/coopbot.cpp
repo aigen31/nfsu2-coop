@@ -206,9 +206,20 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Dump the player cars this client received, so two machines can be compared
+    // coordinate by coordinate (this is how the position sync is verified).
+    std::printf("cars:");
+    for (const auto& kv : client.world().entities) {
+        if (kv.second.kind != EKind::Player) continue;
+        std::printf(" id=%u(%.2f,%.2f,%.2f)", kv.first, kv.second.st.pos.x, kv.second.st.pos.y,
+                    kv.second.st.pos.z);
+    }
+    std::printf("\n");
+
     const bool ok = client.connected() && (!raceMode || raceFinished);
     client.stop();
     logClose();
     return ok ? 0 : 3;
 }
+
 
