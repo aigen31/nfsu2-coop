@@ -173,9 +173,29 @@ TEST(race_end_to_end) {
     CHECK(r.p[0].finished);
     CHECK(r.p[1].finished);
     CHECK(r.p[2].finished);
-    CHECK(r.p[0].place == 1);
-    CHECK(r.p[1].place == 2);
-    CHECK(r.p[2].place == 3);
+
+    // Places are a permutation of 1..3 and, crucially, follow the finish TIMES:
+    // each client measures its own elapsed time, so who wins by a few ms is not
+    // fixed, but the order must always match the reported times.
+    bool permutation = true;
+    int seen[4] = {0, 0, 0, 0};
+    for (int i = 0; i < 3; ++i) {
+        const u8 place = r.p[i].place;
+        if (place < 1 || place > 3) permutation = false;
+        else ++seen[place];
+    }
+    CHECK(permutation);
+    CHECK_EQ(seen[1], 1);
+    CHECK_EQ(seen[2], 1);
+    CHECK_EQ(seen[3], 1);
+    int order[3] = {0, 1, 2};
+    std::sort(order, order + 3, [&](int a, int b) {
+        if (r.p[a].finishMs != r.p[b].finishMs) return r.p[a].finishMs < r.p[b].finishMs;
+        return a < b;
+    });
+    CHECK_EQ(r.p[order[0]].place, static_cast<u8>(1));
+    CHECK_EQ(r.p[order[1]].place, static_cast<u8>(2));
+    CHECK_EQ(r.p[order[2]].place, static_cast<u8>(3));
 
     // Career was applied once, and both guests ended with the host's ledger.
     const u32 key = careerKey(kCareerRace, 7);
@@ -246,3 +266,5 @@ TEST(host_stop_drops_guests) {
 }
 
 int main() { return ::runAll("sync"); }
+
+
