@@ -29,12 +29,29 @@ std::vector<PuppetTarget> g_puppets;
 
 struct SavedCar {
     u32 car = 0;
+    u32 ri = 0;  // CarRenderInfo seen for this car this frame
     bool valid = false;
     f32 pos[3] = {};
     f32 pos2[3] = {};
     f32 basis[12] = {};
 };
 SavedCar g_saved[kMaxPuppets];
+
+// Render-info experiment: the CarRenderInfo (Render's `this`) is where the
+// engine keeps the model/geometry it is about to draw. NFSU2_COOP_DUMP=1 writes
+// the local and one borrowed CarRenderInfo to render-dump.txt;
+// NFSU2_COOP_SWAP=0x10,0x14,... copies those dword offsets from the local one
+// into the borrowed one for the frame.
+u32 g_localRI = 0;
+bool g_dumpWanted = false;
+bool g_dumpedLocal = false;
+bool g_dumpedPuppet = false;
+std::vector<u32> g_swapOffsets;
+struct RISave {
+    u32 off = 0;
+    u32 val = 0;
+};
+std::vector<RISave> g_riSaved[kMaxPuppets];
 // Model identity lives in a few dwords near the start of the car object:
 // +0x0C is the model name ("CELICA", "3000GT"), +0x10/+0x14/+0x20 point at the
 // per-model parameter tables. Copying them lets a borrowed traffic car wear the
@@ -91,8 +108,40 @@ bool writeMem(u32 addr, const void* in, std::size_t n) {
                               nullptr) != FALSE;
 }
 
-void applyPuppet(int slot, const PuppetTarget& t) {
+void dumpRI(const char* tag, u32 ri) {
+    if (!ri) return;
+    char path[MAX_PATH] = {};
+    GetModuleFileNameA(nullptr, path, MAX_PATH);
+    std::string p = path;
+    const std::size_t slash = p.find_last_of("\\/");
+    if (slash != std::string::npos) p.resize(slash + 1);
+    p += "render-dump.txt";
+    FILE* f = std::fopen(p.c_str(), "ab");
+    if (!f) return;
+    std::fprintf(f, "%s %08X\n", tag, ri);
+    for (u32 off = 0; off < 0x2D80; off += 32) {
+        u32 v[8] = {};
+        if (!readMem(ri + off, v, sizeof(v))) break;
+        std::fprintf(f, "%04X:", off);
+        for (int i = 0; i < 8; ++i) std::fprintf(f, " %08X", v[i]);
+        std::fprintf(f, "\n");
+    }
+    std::fclose(f);
+}
+
+void applyPuppet(int slot, const PuppetTarget& t, u32 ri) {
     SavedCar& s = g_saved[slot];
+    s.ri = ri;
+    g_riSaved[slot].clear();
+    if (!g_swapOffsets.empty() && g_localRI && ri) {
+        for (u32 off : g_swapOffsets) {
+            u32 lv = 0, bv = 0;
+            if (!readMem(g_localRI + off, &lv, sizeof(lv))) continue;
+            if (!readMem(ri + off, &bv, sizeof(bv))) continue;
+            if (lv == bv) continue;
+            if (writeMem(ri + off, &lv, sizeof(lv))) g_riSaved[slot].push_back({off, bv});
+        }
+    }
     if (g_modelSwap && g_localCar) {
         for (int f = 0; f < kModelFieldCount; ++f) {
             u32 src = 0, dst = 0;
@@ -125,13 +174,25 @@ void onRender(void* self) {
     u32 carObj = 0;
     if (!readMem(static_cast<u32>(reinterpret_cast<std::uintptr_t>(self)), &carObj, sizeof(carObj))) return;
 
+    const u32 ri = static_cast<u32>(reinterpret_cast<std::uintptr_t>(self));
     std::unique_lock<std::mutex> lock(g_mutex, std::try_to_lock);
     if (!lock.owns_lock()) return;
-    if (g_localCar && carObj == g_localCar) return;  // never touch our own car
+    if (g_localCar && carObj == g_localCar) {
+        g_localRI = ri;
+        if (g_dumpWanted && !g_dumpedLocal) {
+            g_dumpedLocal = true;
+            dumpRI("LOCAL", ri);
+        }
+        return;  // never touch our own car
+    }
     for (int i = 0; i < static_cast<int>(g_puppets.size()) && i < kMaxPuppets; ++i) {
         if (g_puppets[i].carPointer != carObj) continue;
         if (g_saved[i].valid) return;
-        applyPuppet(i, g_puppets[i]);
+        if (g_dumpWanted && !g_dumpedPuppet) {
+            g_dumpedPuppet = true;
+            dumpRI("PUPPET", ri);
+        }
+        applyPuppet(i, g_puppets[i], ri);
         return;
     }
 }
@@ -160,6 +221,27 @@ bool CarRenderer::install(u32 renderVa, bool modelSwap) {
     }
     g_jump = reinterpret_cast<std::uintptr_t>(g_trampoline);
     g_modelSwap = g_modelSwapCfg || std::getenv("NFSU2_COOP_MODEL_SWAP") != nullptr;
+    g_dumpWanted = std::getenv("NFSU2_COOP_DUMP") != nullptr;
+    if (const char* sw = std::getenv("NFSU2_COOP_SWAP")) {
+        std::string s(sw);
+        std::size_t pos = 0;
+        while (pos < s.size()) {
+            const std::size_t comma = s.find(',', pos);
+            const std::string part = s.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
+            g_swapOffsets.push_back(static_cast<u32>(std::strtoul(part.c_str(), nullptr, 16)));
+            if (comma == std::string::npos) break;
+            pos = comma + 1;
+        }
+    }
+    if (g_swapOffsets.empty()) {
+        // Verified on the reference build: the model tables/geometry the render
+        // info uses live at +0x04 and +0x08; copying them makes the borrowed car
+        // draw with the local player's model.
+        g_swapOffsets = {0x04, 0x08};
+        NFC_INFO("render: using built-in render-info swap offsets 0x04,0x08");
+    } else {
+        NFC_INFO("render: render-info swap offsets: %zu", g_swapOffsets.size());
+    }
     if (MH_EnableHook(target) != MH_OK) {
         NFC_ERROR("render: MH_EnableHook failed");
         return false;
@@ -204,6 +286,8 @@ void CarRenderer::restorePuppets() {
             for (int f = 0; f < kModelFieldCount; ++f)
                 writeMem(s.car + kModelFields[f], &g_savedModel[i][f], sizeof(u32));
         }
+        for (const RISave& sv : g_riSaved[i]) writeMem(s.ri + sv.off, &sv.val, sizeof(u32));
+        g_riSaved[i].clear();
         s.valid = false;
     }
 }
@@ -214,5 +298,8 @@ void CarRenderer::clear() {
 }
 
 }  // namespace nfc
+
+
+
 
 
