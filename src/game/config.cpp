@@ -133,6 +133,7 @@ bool loadConfig(const std::string& path, GameConfig& out) {
     out.publishTraffic = ini.getBool("game", "publishtraffic", true);
     out.drawRemoteCars = ini.getBool("game", "drawremotecars", true);
     out.modelSwap = ini.getBool("game", "modelswap", false);
+    out.bridgePort = static_cast<u16>(ini.getInt("debug", "bridgeport", 0));
     out.snapshotHz = static_cast<u32>(ini.getInt("game", "snapshothz", kSnapshotHz));
     out.countdownMs = static_cast<u32>(ini.getInt("game", "countdownms", kCountdownMs));
     out.maxTraffic = static_cast<u32>(ini.getInt("game", "maxtraffic", 20));
@@ -169,6 +170,7 @@ bool loadBindings(const std::string& path, GameBindings& out) {
 }
 
 }  // namespace nfc
+
 
 
 

@@ -15,6 +15,7 @@
 #include "core/log.h"
 #include "core/session.h"
 #include "core/types.h"
+#include "game/bridge.h"
 #include "game/config.h"
 #include "game/nfsu2_bindings.h"
 #include "game/overlay.h"
@@ -244,8 +245,13 @@ DWORD WINAPI tickThread(LPVOID) {
     }
     if (g_cfg.overlay) {
         overlay.init();
-        overlay.setGameThreadHook([] { g_game->pumpGameThread(); });
+        overlay.setGameThreadHook([] {
+            g_game->pumpGameThread();
+            nfc::Bridge::pump();
+        });
     }
+    if (g_cfg.bridgePort) nfc::Bridge::start(g_cfg.bridgePort);
+
     if (g_cfg.drawRemoteCars && g_game->bound()) {
         if (!nfc::CarRenderer::instance().install(g_game->renderVa(), g_cfg.modelSwap))
             NFC_WARN("renderer: not installed, remote cars will not be drawn");
@@ -320,6 +326,8 @@ BOOL WINAPI DllMain(HMODULE module, DWORD reason, LPVOID) {
     }
     return TRUE;
 }
+
+
 
 
 

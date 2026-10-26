@@ -19,6 +19,7 @@ struct GameConfig {
     bool publishTraffic = true;
     bool drawRemoteCars = true;
     bool modelSwap = false;
+    std::uint16_t bridgePort = 0;
     u32 snapshotHz = kSnapshotHz;
     u32 countdownMs = kCountdownMs;
     u32 maxTraffic = 20;
@@ -79,6 +80,7 @@ struct GameBindings {
 bool loadBindings(const std::string& path, GameBindings& out);
 
 }  // namespace nfc
+
 
 
 

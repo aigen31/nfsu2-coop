@@ -40,7 +40,8 @@ $inc = @(
     (Join-Path $root 'vendor\enet\include'),
     (Join-Path $root 'vendor\minhook\include'),
     (Join-Path $root 'vendor\imgui'),
-    (Join-Path $root 'vendor\imgui\backends')
+    (Join-Path $root 'vendor\imgui\backends'),
+    (Join-Path $root 'vendor')
 ) | ForEach-Object { "-I$_" }
 
 $defs = @('-D_WIN32_WINNT=0x0601', '-DNOMINMAX', '-DWIN32_LEAN_AND_MEAN', '-D_CRT_SECURE_NO_WARNINGS')
@@ -124,6 +125,7 @@ if ($Targets -contains 'plugin') {
         (Join-Path $root 'src\game\scanner.cpp'),
         (Join-Path $root 'src\game\overlay.cpp'),
         (Join-Path $root 'src\game\render_cars.cpp'),
+        (Join-Path $root 'src\game\bridge.cpp'),
         (Join-Path $root 'vendor\imgui\imgui.cpp'),
         (Join-Path $root 'vendor\imgui\imgui_draw.cpp'),
         (Join-Path $root 'vendor\imgui\imgui_tables.cpp'),
@@ -145,5 +147,7 @@ if ($Targets -contains 'plugin') {
 }
 
 Write-Host "done."
+
+
 
 
