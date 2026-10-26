@@ -232,6 +232,23 @@ bool Bridge::start(std::uint16_t port) {
         return r;
     });
 
+    g_server.Register("car.setRoot", [](const coopbridge::json::Value& p) {
+        const std::uint32_t slot = static_cast<std::uint32_t>(p.get("slot").asInt(1));
+        std::uint32_t car = 0;
+        if (!readMem(0x89CCF8 + slot * 4, &car, sizeof(car)) || !car)
+            throw coopbridge::Error(-32013, "no car in that slot");
+        std::uint32_t root = static_cast<std::uint32_t>(p.get("root").asInt(0));
+        if (!root) throw coopbridge::Error(-32016, "root required");
+        std::uint32_t old = 0;
+        readMem(car, &old, sizeof(old));
+        writeMem(car, &root, sizeof(root));
+        auto r = coopbridge::json::Value::object();
+        r.set("car", static_cast<std::int64_t>(car));
+        r.set("oldRoot", static_cast<std::int64_t>(old));
+        r.set("root", static_cast<std::int64_t>(root));
+        return r;
+    });
+
     g_server.Register("car.slots", [](const coopbridge::json::Value&) { return slotList(); });
     g_server.Register("car.name", [](const coopbridge::json::Value& p) {
         std::uint32_t car = static_cast<std::uint32_t>(p.get("car").asInt());
