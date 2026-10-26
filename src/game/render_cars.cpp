@@ -13,6 +13,7 @@
 #include "core/log.h"
 
 namespace nfc {
+void reloadPuppetModel(int slot, u32 car, u32 wantedModel);
 namespace {
 
 using u8 = std::uint8_t;
@@ -135,6 +136,7 @@ void dumpRI(const char* tag, u32 ri) {
 }
 
 void applyPuppet(int slot, const PuppetTarget& t, u32 ri) {
+
     SavedCar& s = g_saved[slot];
     s.ri = ri;
     s.cloned = false;
@@ -408,6 +410,7 @@ void reloadPuppetModel(int slot, u32 car, u32 wantedModel) {
 void CarRenderer::restorePuppets() {
     for (int i = 0; i < static_cast<int>(g_puppets.size()) && i < kMaxPuppets; ++i)
         reloadPuppetModel(i, g_puppets[i].carPointer, g_puppets[i].model);
+
     std::lock_guard<std::mutex> lock(g_mutex);
     for (int i = 0; i < kMaxPuppets; ++i) {
         SavedCar& s = g_saved[i];
