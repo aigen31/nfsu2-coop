@@ -1,7 +1,7 @@
-// Toolchain catalog — every tool this project needs, why, and where it comes from.
-// `toolchain/install.ps1` installs the bundled ones (pinned by SHA-256) and the
-// Python test dependencies; the "recommended" ones are manual installs from
-// official sources, listed so nobody has to guess what a reverse engineer needs.
+# Toolchain catalog — every tool this project needs, why, and where it comes from.
+# `toolchain/install.ps1` installs the bundled ones (pinned by SHA-256) and the
+# Python test dependencies; the "recommended" ones are manual installs from
+# official sources, listed so nobody has to guess what a reverse engineer needs.
 schema: 1
 project: nfsu2-coop
 updated: "2026-10-27"
@@ -59,7 +59,8 @@ python:
     version: ">=2024"
     why: "ad-hoc PE inspection while hunting offsets (the shipped probe has its own parser)"
 
-installed:  - id: x64dbg
+installed:
+  - id: x64dbg
     role: debugger (installed)
     version: "snapshot 2026-05-27"
     url: "https://github.com/x64dbg/x64dbg/releases/download/2026.05.27/snapshot_2026-05-27_12-11.zip"
@@ -67,19 +68,16 @@ installed:  - id: x64dbg
     size_mb: 30
     install_path: "toolchain/tools/x64dbg"
     why: "32-bit debugger (release/x32/x32dbg.exe) for hardware write watchpoints: find the car spawn function, where the model is bound. release/x32/headless.exe is a console front-end for scripted attach."
-    license: "GPLv3"recommended:
+    license: "GPLv3"
+
+recommended:
   - id: ghidra
     role: decompiler
     version: "11.x"
     url: "https://github.com/NationalSecurityAgency/ghidra/releases"
     why: "Decompile speed2.exe around the anchors; find the player car pointer chain and the event launcher."
     license: "Apache-2.0"
-  - id: x64dbg
-    role: debugger
-    version: "latest snapshot"
-    url: "https://github.com/x64dbg/x64dbg/releases"
-    why: "32-bit debugger: break on Player::ClearZone (0x5FFE70), walk `this`, dump the car object."
-    license: "GPLv3"
+
   - id: cheat-engine
     role: memory scanner
     version: "7.x"
@@ -157,4 +155,6 @@ notes:
   - "Pinned downloads are checked against the SHA-256 above before extraction; a mismatch aborts the install."
   - "vendor/ is committed source (MIT/BSD), not a package manager cache, so a clone builds without network."
   - "The .asi must be 32-bit: speed2.exe is i386 (PE machine 0x014C)."
+
+
 
