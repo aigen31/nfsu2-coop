@@ -116,10 +116,24 @@ u32 Nfsu2Game::carModel() const {
     if (!b_.carBound()) return 0;
     const u32 car = carAt(b_.carIndex);
     if (!car) return 0;
-    u32 desc = 0, model = 0;
-    if (!safeRead(at(car + 0x554), &desc, sizeof(desc)) || !desc) return 0;
-    if (!safeRead(at(desc + 0x04), &model, sizeof(model))) return 0;
-    return model;
+    u32 namePtr = 0;
+    char name[32] = {};
+    if (!safeRead(at(car + 0x0C), &namePtr, sizeof(namePtr)) || !namePtr) return 0;
+    if (!safeRead(at(namePtr), name, sizeof(name) - 1)) return 0;
+    // The model table is a fixed array at 0x890170 with a 0x940 stride on this build;
+    // the index of each model was read out of the game (see docs/GAME-BINDINGS.ru.md).
+    struct ModelEntry {
+        const char* name;
+        u32 id;
+    };
+    static const ModelEntry kModels[] = {
+        {"CELICA", 0x00890170},   {"MIATA", 0x00890AB0},     {"GOLF", 0x008913F0},     {"CIVIC", 0x00891D30},
+        {"TAXI", 0x00892670},     {"4DR_SEDAN", 0x00892FB0}, {"SUV", 0x00894230},      {"PICKUP", 0x00894B70},
+        {"HATCHBACK02", 0x008954B0}, {"4DR_SEDAN02", 0x00896730}, {"HATCHBACK", 0x00897070},
+    };
+    for (const ModelEntry& m : kModels)
+        if (std::strcmp(name, m.name) == 0) return m.id;
+    return 0;
 }
 
 u32 Nfsu2Game::carPaint() const { return 0; }  // paint fields not located yet

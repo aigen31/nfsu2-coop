@@ -361,8 +361,12 @@ void reloadPuppetModel(int slot, u32 car, u32 wantedModel) {
         if (!readMem(desc + 0x04, &model, sizeof(model)) || !model) return;
     }
     if (g_reloadedCar[slot] == car && g_reloadedModel[slot] == model) return;
+    // The model lives on the car's visual root (car+0x00), not on the car object:
+    // rebuilding the root is what actually selects the model (verified live).
+    std::uint32_t root = 0;
+    if (!readMem(car, &root, sizeof(root)) || !root) return;
     using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
-    reinterpret_cast<ReloadFn>(kReloadModelVa)(reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)), model);
+    reinterpret_cast<ReloadFn>(kReloadModelVa)(reinterpret_cast<void*>(static_cast<std::uintptr_t>(root)), model);
     g_reloadedCar[slot] = car;
     g_reloadedModel[slot] = model;
     NFC_INFO("render: reloaded model %08X on car %08X (slot %d)", model, car, slot);
