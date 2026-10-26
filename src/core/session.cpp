@@ -119,6 +119,14 @@ void HostSession::tick(u32 nowMsArg) {
     for (const NetEvent& ev : events) handleEvent(ev);
 
     updateLocalCar(nowMsArg);
+    if (w_.localSlot != kNoPlayer) {
+        const u32 m = game_.carModel();
+        if (m && w_.players[w_.localSlot].model != m) {
+            w_.players[w_.localSlot].model = m;
+            w_.players[w_.localSlot].paint = game_.carPaint();
+            NFC_INFO("host: local model %08X paint %06X", m, game_.carPaint());
+        }
+    }
     if (cfg_.publishGameEntities && nowMsArg - lastEntityScanMs_ >= 100) {
         lastEntityScanMs_ = nowMsArg;
         mirrorGameEntities(nowMsArg);
