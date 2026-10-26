@@ -131,7 +131,11 @@ void tickOnce(u32 now) {
         else if (g_client)
             g_client->setReady(true);
     }
-    if (keyPressed(VK_F6) && g_host) g_host->openRace(g_cfg.eventId, 4001, 10);
+    if (keyPressed(VK_F6) && g_host) {
+        nfc::World* w = world();
+        if (!w || w->race.phase == nfc::RacePhase::Idle || w->race.phase == nfc::RacePhase::Finished)
+            g_host->openRace(g_cfg.eventId, 4001, 10);
+    }
     if (keyPressed(VK_F7) && g_client)
         g_client->reportCareerEvent(nfc::careerKey(nfc::kCareerRace, g_cfg.eventId));
     if (keyPressed(VK_F8)) nfc::Overlay::instance().toggle();
@@ -150,7 +154,7 @@ DWORD WINAPI tickThread(LPVOID) {
     const std::size_t slash = dir.find_last_of("\\/");
     if (slash != std::string::npos) dir.resize(slash + 1);
     g_iniPath = dir + "nfsu2coop.ini";
-    const std::string logPath = dir + "NFSU2Coop.log";
+    const std::string logPath = dir + "NFSU2Coop-" + std::to_string(GetCurrentProcessId()) + ".log";
 
     FILE* probe = std::fopen(g_iniPath.c_str(), "rb");
     if (!probe) {
@@ -196,7 +200,17 @@ DWORD WINAPI tickThread(LPVOID) {
 
     if (g_cfg.host) {
         g_host = std::make_unique<nfc::HostSession>(*g_game, sc);
-        if (!g_host->start()) NFC_ERROR("host start failed on port %u", sc.port);
+        if (!g_host->start()) {
+            // Another instance on this PC already hosts: join it instead of
+            // leaving the player offline. Handy for two copies on one machine.
+            NFC_WARN("host start failed on port %u, falling back to a client", sc.port);
+            g_host.reset();
+            sc.hostMode = false;
+            sc.serverHost = "127.0.0.1";
+            g_client = std::make_unique<nfc::ClientSession>(*g_game, sc);
+            if (!g_client->start()) NFC_ERROR("client fallback failed");
+            else g_game->onNotice("port busy: joined the local host as a client");
+        }
     } else {
         g_client = std::make_unique<nfc::ClientSession>(*g_game, sc);
         if (!g_client->start()) NFC_ERROR("client start failed");
@@ -239,4 +253,5 @@ BOOL WINAPI DllMain(HMODULE module, DWORD reason, LPVOID) {
     }
     return TRUE;
 }
+
 

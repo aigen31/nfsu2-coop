@@ -51,6 +51,13 @@ struct GameBindings {
     u32 yawOffset = 0;
     u32 speedOffset = 0;
     u32 gearOffset = 0;
+    // Array of Car*: [CarArray + CarIndex*CarStride] = local player's car.
+    // Found on the verified build: CarArray 0x89CCF8, index 0, stride 4,
+    // position at +0x50, 3x3 basis at +0x90.
+    u32 carArray = 0;
+    u32 carIndex = 0;
+    u32 carStride = 4;
+    u32 rotOffset = 0;
     // Traffic/AI cars: a flat array in the game.
     u32 trafficList = 0;
     u32 trafficCount = 0;
@@ -63,11 +70,12 @@ struct GameBindings {
     u32 careerRepFn = 0;
     u32 zonePointer = 0;
 
-    bool carBound() const { return carPointer != 0 && posOffset != 0; }
+    bool carBound() const { return (carPointer != 0 || carArray != 0) && posOffset != 0; }
     bool trafficBound() const { return trafficList != 0 && trafficCount != 0 && trafficStride != 0; }
 };
 
 bool loadBindings(const std::string& path, GameBindings& out);
 
 }  // namespace nfc
+
 

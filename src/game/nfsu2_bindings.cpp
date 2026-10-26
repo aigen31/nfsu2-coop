@@ -45,11 +45,22 @@ bool Nfsu2Game::init(HMODULE module, const GameConfig& cfg) {
 
     GameBindings tmp;
     if (!cfg.iniPath.empty()) loadBindings(cfg.iniPath, b_);
+    if (!b_.carBound() && image_.sizeOfImage() == 0x532000 && image_.entryPoint() == 0x0035BCC7) {
+        // Verified build (speed2.exe 4,800,512 bytes, sha256 bc34932b...): the
+        // local car is entry 0 of the car array at 0x89CCF8, position +0x50.
+        b_.carArray = 0x89CCF8;
+        b_.carIndex = 0;
+        b_.carStride = 4;
+        b_.posOffset = 0x50;
+        b_.rotOffset = 0x90;
+        NFC_INFO("game: using built-in bindings for the verified build");
+    }
     if (!b_.carBound()) {
         note("game memory not bound: car/traffic sync off (see docs/GAME-BINDINGS.md)");
         NFC_WARN("game: no car bindings, protocol-only mode");
     } else {
-        NFC_INFO("game: bindings car=%08X pos=%X traffic=%08X", b_.carPointer, b_.posOffset, b_.trafficList);
+        NFC_INFO("game: bindings carArray=%08X index=%u pos=%X traffic=%08X", b_.carArray, b_.carIndex,
+                 b_.posOffset, b_.trafficList);
     }
     // Prove the documented anchors resolve in this exact build.
     int ok = 0;
@@ -69,11 +80,24 @@ void Nfsu2Game::shutdown() {
 bool Nfsu2Game::readLocalCar(CarState& out) {
     if (!b_.carBound()) return false;
     u8* car = nullptr;
-    if (!safeRead(at(b_.carPointer), &car, sizeof(car)) || !car) return false;
+    if (b_.carArray) {
+        const u32 slot = b_.carArray + b_.carIndex * b_.carStride;
+        if (!safeRead(at(slot), &car, sizeof(car)) || !car) return false;
+    } else {
+        if (!safeRead(at(b_.carPointer), &car, sizeof(car)) || !car) return false;
+    }
     CarState st;
     if (!safeRead(car + b_.posOffset, &st.pos, sizeof(Vec3))) return false;
     if (b_.velOffset) safeRead(car + b_.velOffset, &st.vel, sizeof(Vec3));
     if (b_.yawOffset) safeRead(car + b_.yawOffset, &st.yaw, sizeof(f32));
+    if (b_.rotOffset) {
+        // 3x3 basis as three vec4 rows; row 1 is the car's forward axis.
+        f32 m[12] = {};
+        if (safeRead(car + b_.rotOffset, m, sizeof(m))) {
+            st.yaw = std::atan2(m[4], m[5]);
+            st.pitch = std::asin(clampf(m[6], -1.0f, 1.0f));
+        }
+    }
     if (b_.speedOffset) {
         f32 speed = 0;
         if (safeRead(car + b_.speedOffset, &speed, sizeof(speed))) st.vel = {speed, 0, 0};

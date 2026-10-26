@@ -15,7 +15,7 @@
 Widescreen Fix). Если его нет — положите `dinput8.dll` из
 [Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases).
 
-Удаление: удалить `NFSU2Coop.asi`, `nfsu2coop.ini`, `NFSU2Coop.log` из `scripts\`.
+Удаление: удалить `NFSU2Coop.asi`, `nfsu2coop.ini`, `NFSU2Coop-<pid>.log` из `scripts\`.
 Сохранения и файлы игры мод не изменяет.
 
 ## 2. Конфиг `scripts\nfsu2coop.ini`
@@ -59,7 +59,7 @@ Widescreen Fix). Если его нет — положите `dinput8.dll` из
 
 ## 5. Проверка, что всё поднялось
 
-`scripts\NFSU2Coop.log`:
+`scripts\NFSU2Coop-<pid>.log`:
 
 ```
 NFSU2Coop 0.4.0 starting (module ...)
@@ -88,3 +88,4 @@ SHA-256 `bc34932b36bb19194000690ec26edf964176856c31fb0978e01e61ee814eee9d`
 (PC 1.2, та же, под которую документированы адреса). На другой сборке проверьте
 `coop-probe`: если якоря не сходятся, мод всё равно запустится в протокольном режиме,
 но привязки надо снимать заново.
+

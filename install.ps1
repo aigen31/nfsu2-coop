@@ -46,4 +46,5 @@ Write-Host "next:"
 Write-Host "  1. edit $ini  (Host=1 to host, Server=<ip> to join)"
 Write-Host "  2. start speed2.exe"
 Write-Host "  3. in game: F6 opens event, F5 ready, F8 toggles the HUD"
-Write-Host "  4. log: $scripts\NFSU2Coop.log"
+Write-Host "  4. log: $scripts\NFSU2Coop-<pid>.log"
+

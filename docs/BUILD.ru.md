@@ -68,3 +68,4 @@ cmake --build build-msvc --config Release
 | `MH_Initialize failed` в логе | другой мод уже инициализировал MinHook; мод это терпит |
 | `cannot bind udp/27970` | порт занят: смените `Port` в ini |
 | `.asi` не грузится | нет ASI-загрузчика (`dinput8.dll`) или файл лежит не в `scripts\` |
+

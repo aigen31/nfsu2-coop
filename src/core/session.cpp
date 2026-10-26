@@ -492,6 +492,13 @@ void HostSession::driveRace(u32 nowMsArg) {
         }
     }
 
+    // A race nobody can finish (no checkpoint binding, a player stuck in a
+    // menu) must not lock the session forever.
+    if (w_.race.phase == RacePhase::Racing && nowMsArg - w_.race.startAtMs > 20u * 60u * 1000u) {
+        NFC_WARN("host: race %u timed out after 20 minutes, aborting", w_.race.eventId);
+        raceAbort(w_, nowMsArg);
+        broadcastNotice("race timed out");
+    }
     raceTick(w_, nowMsArg);
 
     if (w_.race.phase != before) {
@@ -724,6 +731,11 @@ bool HostSession::reportLocalFinished(u32 timeMs) {
 
 bool HostSession::forceStart() {
     if (w_.race.phase != RacePhase::Lobby) return false;
+    if (!w_.race.p[0].joined && w_.players[0].loaded) {
+        w_.race.p[0].joined = true;
+        w_.race.p[0].ready = true;
+        w_.players[0].ready = true;
+    }
     if (!raceBeginCountdown(w_, nowMs_)) return false;
     broadcastRace();
     game_.onRace(w_.race, RacePhase::Lobby);
@@ -1227,4 +1239,5 @@ std::string ClientSession::statusText() const {
 }
 
 }  // namespace nfc
+
 

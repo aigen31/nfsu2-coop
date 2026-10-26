@@ -96,7 +96,13 @@ std::string defaultConfigText() {
         "; networking, lobby, race director, standings and career still work;\n"
         "; car/traffic sync needs real values. See docs/GAME-BINDINGS.md.\n"
         "CarPointer=0\n"
-        "PosOffset=0\n"
+        "; Verified build defaults (speed2.exe 4,800,512 bytes, image 0x532000):\n"
+        "; CarArray=0x89CCF8, CarIndex=0, PosOffset=0x50, RotOffset=0x90\n"
+        "CarArray=0x89CCF8\n"
+        "CarIndex=0\n"
+        "CarStride=4\n"
+        "PosOffset=0x50\n"
+        "RotOffset=0x90\n"
         "VelOffset=0\n"
         "YawOffset=0\n"
         "SpeedOffset=0\n"
@@ -141,6 +147,10 @@ bool loadBindings(const std::string& path, GameBindings& out) {
     out.yawOffset = va("yawoffset");
     out.speedOffset = va("speedoffset");
     out.gearOffset = va("gearoffset");
+    out.carArray = va("cararray");
+    out.carIndex = va("carindex");
+    out.carStride = va("carstride") ? va("carstride") : 4;
+    out.rotOffset = va("rotoffset");
     out.trafficList = va("trafficlist");
     out.trafficCount = va("trafficcount");
     out.trafficStride = va("trafficstride");
@@ -154,3 +164,5 @@ bool loadBindings(const std::string& path, GameBindings& out) {
 }
 
 }  // namespace nfc
+
+
