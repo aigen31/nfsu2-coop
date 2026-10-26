@@ -177,15 +177,6 @@ void applyPuppet(int slot, const PuppetTarget& t, u32 ri) {
             if (writeMem(ri + off, &lv, sizeof(lv))) g_riSaved[slot].push_back({off, bv});
         }
     }
-    if (g_modelSwap && g_localCar) {
-        for (int f = 0; f < kModelFieldCount; ++f) {
-            u32 src = 0, dst = 0;
-            if (!readMem(g_localCar + kModelFields[f], &src, sizeof(src))) continue;
-            if (!readMem(t.carPointer + kModelFields[f], &dst, sizeof(dst))) continue;
-            g_savedModel[slot][f] = dst;
-            writeMem(t.carPointer + kModelFields[f], &src, sizeof(src));
-        }
-    }
     if (!readMem(t.carPointer + 0x50, s.pos, sizeof(s.pos))) return;
     if (!readMem(t.carPointer + 0x60, s.pos2, sizeof(s.pos2))) return;
     if (!readMem(t.carPointer + 0x90, s.basis, sizeof(s.basis))) return;
@@ -255,6 +246,11 @@ volatile long g_carModelCount = 0;
 
 void __thiscall detourBuild(void* car, std::uint32_t model) {
     const u32 carPtr = static_cast<u32>(reinterpret_cast<std::uintptr_t>(car));
+    static volatile long calls = 0;
+    const long n = InterlockedIncrement(&calls);
+    if (n <= 128)
+        NFC_INFO("render: build #%ld car %08X model %08X%s", n, carPtr, model,
+                 (g_localCar && carPtr == g_localCar) ? " LOCAL" : "");
     bool known = false;
     for (long i = 0; i < g_carModelCount && i < 64; ++i)
         if (g_carModels[i].car == carPtr) {
@@ -266,7 +262,6 @@ void __thiscall detourBuild(void* car, std::uint32_t model) {
         g_carModels[g_carModelCount].car = carPtr;
         g_carModels[g_carModelCount].model = model;
         InterlockedIncrement(&g_carModelCount);
-        NFC_INFO("render: car %08X built with model %08X", carPtr, model);
     }
     if (g_origBuild) g_origBuild(car, model);
 }
@@ -383,10 +378,7 @@ void CarRenderer::restorePuppets() {
         writeMem(s.car + 0x50, s.pos, sizeof(s.pos));
         writeMem(s.car + 0x60, s.pos2, sizeof(s.pos2));
         writeMem(s.car + 0x90, s.basis, sizeof(s.basis));
-        if (g_modelSwap) {
-            for (int f = 0; f < kModelFieldCount; ++f)
-                writeMem(s.car + kModelFields[f], &g_savedModel[i][f], sizeof(u32));
-        }
+
         if (s.cloned) writeMem(s.ri, &s.riCar, sizeof(u32));
         for (const RISave& sv : g_riSaved[i]) writeMem(s.ri + sv.off, &sv.val, sizeof(u32));
         g_riSaved[i].clear();
