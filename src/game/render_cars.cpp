@@ -39,10 +39,11 @@ SavedCar g_saved[kMaxPuppets];
 // +0x0C is the model name ("CELICA", "3000GT"), +0x10/+0x14/+0x20 point at the
 // per-model parameter tables. Copying them lets a borrowed traffic car wear the
 // player's model for one frame.
-constexpr u32 kModelFields[] = {0x0C, 0x10, 0x14, 0x20};
-constexpr int kModelFieldCount = 4;
+constexpr u32 kModelFields[] = {0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C, 0x20, 0x2C};
+constexpr int kModelFieldCount = 8;
 u32 g_savedModel[kMaxPuppets][kModelFieldCount] = {};
 bool g_modelSwap = false;
+bool g_modelSwapCfg = false;
 volatile long g_renderCalls = 0;
 
 void write32(u8*& p, std::uint32_t v) { std::memcpy(p, &v, 4); p += 4; }
@@ -142,7 +143,8 @@ CarRenderer& CarRenderer::instance() {
     return r;
 }
 
-bool CarRenderer::install(u32 renderVa) {
+bool CarRenderer::install(u32 renderVa, bool modelSwap) {
+    g_modelSwapCfg = modelSwap;
     if (installed_) return true;
     if (!renderVa) return false;
     if (MH_Initialize() != MH_OK && MH_Initialize() != MH_ERROR_ALREADY_INITIALIZED) return false;
@@ -157,7 +159,7 @@ bool CarRenderer::install(u32 renderVa) {
         return false;
     }
     g_jump = reinterpret_cast<std::uintptr_t>(g_trampoline);
-    g_modelSwap = std::getenv("NFSU2_COOP_MODEL_SWAP") != nullptr;
+    g_modelSwap = g_modelSwapCfg || std::getenv("NFSU2_COOP_MODEL_SWAP") != nullptr;
     if (MH_EnableHook(target) != MH_OK) {
         NFC_ERROR("render: MH_EnableHook failed");
         return false;
@@ -212,4 +214,5 @@ void CarRenderer::clear() {
 }
 
 }  // namespace nfc
+
 

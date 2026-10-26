@@ -247,7 +247,7 @@ DWORD WINAPI tickThread(LPVOID) {
         overlay.setGameThreadHook([] { g_game->pumpGameThread(); });
     }
     if (g_cfg.drawRemoteCars && g_game->bound()) {
-        if (!nfc::CarRenderer::instance().install(g_game->renderVa()))
+        if (!nfc::CarRenderer::instance().install(g_game->renderVa(), g_cfg.modelSwap))
             NFC_WARN("renderer: not installed, remote cars will not be drawn");
     }
 
@@ -320,6 +320,7 @@ BOOL WINAPI DllMain(HMODULE module, DWORD reason, LPVOID) {
     }
     return TRUE;
 }
+
 
 
 

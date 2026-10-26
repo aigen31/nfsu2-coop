@@ -85,6 +85,8 @@ std::string defaultConfigText() {
         "\n[Game]\n"
         "PublishTraffic=1\n"
         "DrawRemoteCars=1\n"
+        "; Use the player's car model for the borrowed puppet car (experimental)\n"
+        "ModelSwap=0\n"
         "SnapshotHz=20\n"
         "CountdownMs=5000\n"
         "MaxTraffic=20\n"
@@ -130,6 +132,7 @@ bool loadConfig(const std::string& path, GameConfig& out) {
     out.eventId = static_cast<u16>(ini.getInt("coop", "eventid", 1));
     out.publishTraffic = ini.getBool("game", "publishtraffic", true);
     out.drawRemoteCars = ini.getBool("game", "drawremotecars", true);
+    out.modelSwap = ini.getBool("game", "modelswap", false);
     out.snapshotHz = static_cast<u32>(ini.getInt("game", "snapshothz", kSnapshotHz));
     out.countdownMs = static_cast<u32>(ini.getInt("game", "countdownms", kCountdownMs));
     out.maxTraffic = static_cast<u32>(ini.getInt("game", "maxtraffic", 20));
@@ -166,6 +169,7 @@ bool loadBindings(const std::string& path, GameBindings& out) {
 }
 
 }  // namespace nfc
+
 
 
 

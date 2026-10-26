@@ -24,7 +24,7 @@ class CarRenderer {
 public:
     static CarRenderer& instance();
 
-    bool install(u32 renderVa);
+    bool install(u32 renderVa, bool modelSwap = false);
     void shutdown();
     bool ready() const { return installed_; }
 
@@ -41,3 +41,4 @@ private:
 };
 
 }  // namespace nfc
+
