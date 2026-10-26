@@ -351,25 +351,58 @@ constexpr std::uintptr_t kReloadModelVa = 0x0063A5A0;
 u32 g_reloadedCar[kMaxPuppets] = {};
 u32 g_reloadedModel[kMaxPuppets] = {};
 
+const char* modelNameOf(u32 id) {
+    struct Entry { u32 id; const char* name; };
+    static const Entry kTable[] = {
+        {0x00890170, "CELICA"}, {0x00890AB0, "MIATA"}, {0x008913F0, "GOLF"}, {0x00891D30, "CIVIC"},
+        {0x00892670, "TAXI"}, {0x00892FB0, "4DR_SEDAN"}, {0x00894230, "SUV"}, {0x00894B70, "PICKUP"},
+        {0x008954B0, "HATCHBACK02"}, {0x00896730, "4DR_SEDAN02"}, {0x00897070, "HATCHBACK"},
+    };
+    for (const Entry& e : kTable)
+        if (e.id == id) return e.name;
+    return nullptr;
+}
+
+std::string descNameOf(u32 car) {
+    u32 root = 0, desc = 0, namePtr = 0;
+    char name[32] = {};
+    if (!readMem(car, &root, sizeof(root)) || !root) return {};
+    if (!readMem(root + 0x554, &desc, sizeof(desc)) || !desc) return {};
+    if (!readMem(desc + 0x08, &namePtr, sizeof(namePtr)) || !namePtr) return {};
+    if (!readMem(namePtr, name, sizeof(name) - 1)) return {};
+    return std::string(name);
+}
+
+// Rebuild the car's visual root until its descriptor really names the wanted model.
+// The game can re-create the root after us (traffic recycling), so this verifies and
+// retries with a cooldown instead of trusting one call.
 void reloadPuppetModel(int slot, u32 car, u32 wantedModel) {
     if (!g_modelSwap || !car) return;
-    std::uint32_t model = wantedModel;
+    u32 model = wantedModel;
     if (!model) {
         if (!g_localCar) return;
-        std::uint32_t desc = 0;
+        u32 desc = 0;
         if (!readMem(g_localCar + 0x554, &desc, sizeof(desc)) || !desc) return;
         if (!readMem(desc + 0x04, &model, sizeof(model)) || !model) return;
     }
+    const char* want = modelNameOf(model);
+    if (!want) return;
+    static u32 lastTryMs[kMaxPuppets] = {};
+    const u32 now = GetTickCount();
+    if (descNameOf(car) == want) {
+        g_reloadedCar[slot] = car;
+        g_reloadedModel[slot] = model;
+        return;
+    }
+    // One attempt per (car, model): the traffic stand-in's visual root is a shared
+    // template that the engine rebuilds from traffic data, so retrying just churns.
     if (g_reloadedCar[slot] == car && g_reloadedModel[slot] == model) return;
-    // The model lives on the car's visual root (car+0x00), not on the car object:
-    // rebuilding the root is what actually selects the model (verified live).
-    std::uint32_t root = 0;
+    lastTryMs[slot] = now;
+    u32 root = 0;
     if (!readMem(car, &root, sizeof(root)) || !root) return;
     using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
     reinterpret_cast<ReloadFn>(kReloadModelVa)(reinterpret_cast<void*>(static_cast<std::uintptr_t>(root)), model);
-    g_reloadedCar[slot] = car;
-    g_reloadedModel[slot] = model;
-    NFC_INFO("render: reloaded model %08X on car %08X (slot %d)", model, car, slot);
+    NFC_INFO("render: rebuilt car %08X root %08X with model %08X (%s), desc was '%s'", car, root, model, want, descNameOf(car).c_str());
 }
 
 void CarRenderer::restorePuppets() {
