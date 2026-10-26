@@ -36,6 +36,7 @@ enum class MsgType : u8 {
     PlayerList = 21,
     Chat = 22,
     HostInfo = 23,
+    Profile = 24,     // client -> host: the owner's car model/paint
 };
 
 enum class Channel : u8 { Control = 0, State = 1 };
@@ -66,17 +67,23 @@ struct HelloMsg {
     u32 nonce = 0;
     std::string name;
     u32 flags = 0;
+    u32 model = 0;  // car model id (a stable .data table offset on this build)
+    u32 paint = 0;  // 0x00RRGGBB, 0 = unknown
     void encode(BitWriter& w) const {
         w.u32v(protocol);
         w.u32v(nonce);
         w.str(name);
         w.u32v(flags);
+        w.u32v(model);
+        w.u32v(paint);
     }
     bool decode(BitReader& r) {
         protocol = r.u32v();
         nonce = r.u32v();
         name = r.str();
         flags = r.u32v();
+        model = r.u32v();
+        paint = r.u32v();
         return r.ok() && name.size() <= 64;
     }
 };

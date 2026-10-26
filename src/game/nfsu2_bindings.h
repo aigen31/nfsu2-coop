@@ -27,6 +27,8 @@ public:
 
     bool readLocalCar(CarState& out) override;
     u32 zoneId() const override;
+    u32 carModel() const override;
+    u32 carPaint() const override;
     void readGameEntities(std::vector<GameEntityView>& out) override;
 
     void onSpawn(EntityId id, EKind kind, u8 model, const CarState& st) override;

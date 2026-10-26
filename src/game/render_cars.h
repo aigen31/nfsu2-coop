@@ -15,6 +15,7 @@
 namespace nfc {
 
 struct PuppetTarget {
+    u32 model = 0;  // the owner's car model id, 0 = use the local player's
     u32 carPointer = 0;  // borrowed car object (the game's own)
     Vec3 pos;            // remote player's position
     float yaw = 0;       // radians, world Z is up

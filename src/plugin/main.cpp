@@ -161,6 +161,7 @@ void updateRenderTargets() {
             if (car) {
                 nfc::PuppetTarget t;
                 t.carPointer = car;
+                t.model = w->players[i].model;
                 t.pos = e->st.pos;
                 t.yaw = e->st.yaw;
                 puppets.push_back(t);

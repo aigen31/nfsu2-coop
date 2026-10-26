@@ -112,6 +112,18 @@ bool Nfsu2Game::readLocalCar(CarState& out) {
     return true;
 }
 
+u32 Nfsu2Game::carModel() const {
+    if (!b_.carBound()) return 0;
+    const u32 car = carAt(b_.carIndex);
+    if (!car) return 0;
+    u32 desc = 0, model = 0;
+    if (!safeRead(at(car + 0x554), &desc, sizeof(desc)) || !desc) return 0;
+    if (!safeRead(at(desc + 0x04), &model, sizeof(model))) return 0;
+    return model;
+}
+
+u32 Nfsu2Game::carPaint() const { return 0; }  // paint fields not located yet
+
 u32 Nfsu2Game::carAt(u32 index) const {
     if (!b_.carArray) return 0;
     u32 car = 0;

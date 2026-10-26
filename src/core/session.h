@@ -62,6 +62,8 @@ public:
     // False while the game is in a menu or the car pointer is not resolved.
     virtual bool readLocalCar(CarState& out) = 0;
     virtual u32 zoneId() const = 0;
+    virtual u32 carModel() const { return 0; }
+    virtual u32 carPaint() const { return 0; }
     // Cars this machine's engine simulates itself: traffic and AI racers.
     virtual void readGameEntities(std::vector<GameEntityView>& out) = 0;
 
@@ -127,6 +129,7 @@ private:
     void onProgressEvent(const Peer& p, BitReader& r);
     void onChat(const Peer& p, BitReader& r);
     void onZone(const Peer& p, BitReader& r);
+    void onProfile(const Peer& p, BitReader& r);
     void onRepairRequest(const Peer& p, BitReader& r);
     void onDigest(const Peer& p, BitReader& r);
 
@@ -230,6 +233,7 @@ private:
     u32 lastStateMs_ = 0;
     u32 lastPingMs_ = 0;
     u32 lastDigestMs_ = 0;
+    u32 sentProfileModel_ = 0;
     u32 seq_ = 0;
     u32 myCarId_ = kNoEntity;
     u32 offsetMs_ = 0;

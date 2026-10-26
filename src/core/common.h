@@ -39,7 +39,7 @@ constexpr PlayerId kNoPlayer = 0xFF;
 using EntityId = u32;
 constexpr EntityId kNoEntity = 0;
 
-constexpr u32 kProtocolVersion = 0x00040000;  // 0.4.0, bump on any wire change
+constexpr u32 kProtocolVersion = 0x00040001;  // 0.4.0, bump on any wire change
 constexpr u32 kMagic = 0x3243464Eu;           // 'NFC2' in little endian
 constexpr u32 kMaxPayload = 1200;             // stay below a 1280 byte MTU
 constexpr u32 kSnapshotEntitiesPerPacket = 18;

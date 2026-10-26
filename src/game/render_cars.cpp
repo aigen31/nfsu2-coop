@@ -318,11 +318,15 @@ constexpr std::uintptr_t kReloadModelVa = 0x0063A5A0;
 u32 g_reloadedCar[kMaxPuppets] = {};
 u32 g_reloadedModel[kMaxPuppets] = {};
 
-void reloadPuppetModel(int slot, u32 car) {
-    if (!g_modelSwap || !g_localCar || !car) return;
-    std::uint32_t desc = 0, model = 0;
-    if (!readMem(g_localCar + 0x554, &desc, sizeof(desc)) || !desc) return;
-    if (!readMem(desc + 0x04, &model, sizeof(model)) || !model) return;
+void reloadPuppetModel(int slot, u32 car, u32 wantedModel) {
+    if (!g_modelSwap || !car) return;
+    std::uint32_t model = wantedModel;
+    if (!model) {
+        if (!g_localCar) return;
+        std::uint32_t desc = 0;
+        if (!readMem(g_localCar + 0x554, &desc, sizeof(desc)) || !desc) return;
+        if (!readMem(desc + 0x04, &model, sizeof(model)) || !model) return;
+    }
     if (g_reloadedCar[slot] == car && g_reloadedModel[slot] == model) return;
     using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
     reinterpret_cast<ReloadFn>(kReloadModelVa)(reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)), model);
@@ -332,7 +336,8 @@ void reloadPuppetModel(int slot, u32 car) {
 }
 
 void CarRenderer::restorePuppets() {
-    for (int i = 0; i < static_cast<int>(g_puppets.size()) && i < kMaxPuppets; ++i) reloadPuppetModel(i, g_puppets[i].carPointer);
+    for (int i = 0; i < static_cast<int>(g_puppets.size()) && i < kMaxPuppets; ++i)
+        reloadPuppetModel(i, g_puppets[i].carPointer, g_puppets[i].model);
     std::lock_guard<std::mutex> lock(g_mutex);
     for (int i = 0; i < kMaxPuppets; ++i) {
         SavedCar& s = g_saved[i];

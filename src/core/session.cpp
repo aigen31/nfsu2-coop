@@ -207,6 +207,11 @@ void HostSession::handleEvent(const NetEvent& ev) {
                     onChat(it->second, rr);
                     break;
                 }
+                case MsgType::Profile: {
+                    BitReader rr(ev.payload);
+                    onProfile(it->second, rr);
+                    break;
+                }
                 case MsgType::Zone: {
                     BitReader rr(ev.payload);
                     onZone(it->second, rr);
@@ -288,6 +293,8 @@ void HostSession::onHello(const NetEvent& ev) {
     pi.name = cleanName(hello.name);
     pi.carId = p.carId;
     pi.zoneId = 0;
+    pi.model = hello.model;
+    pi.paint = hello.paint;
     pi.ready = false;
     Entity& car = w_.upsert(p.carId, EKind::Player);
     car.owner = slot;
@@ -299,7 +306,7 @@ void HostSession::onHello(const NetEvent& ev) {
     sendSnapshot(p, nowMs_);
     broadcastPlayerList();
     game_.onNotice(pi.name + " joined");
-    NFC_INFO("host: slot %u = '%s' (link %u)", slot, pi.name.c_str(), ev.peer);
+    NFC_INFO("host: slot %u = '%s' (link %u) model %08X paint %06X", slot, pi.name.c_str(), ev.peer, pi.model, pi.paint);
 }
 
 void HostSession::sendWelcome(Peer& p) {
@@ -576,9 +583,15 @@ void HostSession::onPlayerState(const Peer& p, BitReader& r) {
     const u8 finished = r.u8v();
     CarState st;
     st.decode(r);
+    const u32 carModel = r.u32v();
+    const u32 carPaint = r.u32v();
     if (!r.ok() || !st.sane()) {
         stats_.badPackets++;
         return;
+    }
+    if (w_.players[p.slot].model != carModel) {
+        w_.players[p.slot].model = carModel;
+        NFC_INFO("host: slot %u model %08X paint %06X", p.slot, carModel, carPaint);
     }
     if (slot != p.slot || carId != p.carId) {
         stats_.badPackets++;
@@ -672,6 +685,17 @@ void HostSession::onChat(const Peer& p, BitReader& r) {
     for (auto& kv : peers_)
         if (kv.second.welcomed) link_.send(kv.second.linkId, MsgType::Chat, Channel::Control, w, true);
     game_.onNotice(w_.players[p.slot].name + ": " + text);
+}
+
+void HostSession::onProfile(const Peer& p, BitReader& r) {
+    const u32 model = r.u32v();
+    const u32 paint = r.u32v();
+    if (!r.ok()) return;
+    if (p.slot != kNoPlayer) {
+        w_.players[p.slot].model = model;
+        w_.players[p.slot].paint = paint;
+        NFC_INFO("host: slot %u profile model %08X paint %06X", p.slot, model, paint);
+    }
 }
 
 void HostSession::onZone(const Peer& p, BitReader& r) {
@@ -842,6 +866,17 @@ void ClientSession::tick(u32 nowMsArg) {
 
     if (connected_) {
         publishLocalCar(nowMsArg);
+        {
+            const u32 m = game_.carModel();
+            if (m && m != sentProfileModel_) {
+                sentProfileModel_ = m;
+                NFC_INFO("client: sending profile model %08X paint %06X", m, game_.carPaint());
+                BitWriter pw(32);
+                pw.u32v(m);
+                pw.u32v(game_.carPaint());
+                link_.send(1, MsgType::Profile, Channel::Control, pw, true);
+            }
+        }
         maybeFinishCountdown(nowMsArg);
         checkTimeouts(nowMsArg);
         sendPing(nowMsArg);
@@ -883,6 +918,8 @@ void ClientSession::handleEvent(const NetEvent& ev) {
             hello.name = cfg_.playerName;
             hello.protocol = kProtocolVersion;
             hello.nonce = static_cast<u32>(mix64(nowMs_, reinterpret_cast<std::uintptr_t>(this)));
+            hello.model = game_.carModel();
+            hello.paint = game_.carPaint();
             BitWriter w(96);
             hello.encode(w);
             link_.send(ev.peer, MsgType::Hello, Channel::Control, w, true);
@@ -1140,6 +1177,8 @@ void ClientSession::publishLocalCar(u32 nowMsArg) {
     w.u32v(w_.players[w_.localSlot].raceTimeMs);
     w.u8v(w_.players[w_.localSlot].finished ? 1 : 0);
     st.encode(w);
+    w.u32v(game_.carModel());
+    w.u32v(game_.carPaint());
     link_.send(1, MsgType::PlayerState, Channel::State, w, false);
     stats_.sent++;
     stats_.sentBytes += w.size();

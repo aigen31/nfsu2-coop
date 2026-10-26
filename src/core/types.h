@@ -135,6 +135,8 @@ struct PlayerInfo {
     u32 lastHeardMs = 0;
     u32 rttMs = 0;
     u32 zoneId = 0;
+    u32 model = 0;   // car model id received from the owner
+    u32 paint = 0;   // 0x00RRGGBB, 0 = unknown
     EntityId carId = kNoEntity;
     u8 place = 0;
     u16 checkpoint = 0;
@@ -148,6 +150,8 @@ struct PlayerInfo {
         w.u8v(static_cast<u8>((connected ? 1 : 0) | (ready ? 2 : 0) | (loaded ? 4 : 0) | (finished ? 8 : 0)));
         w.u16v(static_cast<u16>(std::min<u32>(rttMs, 65535)));
         w.u32v(zoneId);
+        w.u32v(model);
+        w.u32v(paint);
         w.u32v(carId);
         w.u8v(place);
         w.str(name);
@@ -161,6 +165,8 @@ struct PlayerInfo {
         finished = (f & 8) != 0;
         rttMs = r.u16v();
         zoneId = r.u32v();
+        model = r.u32v();
+        paint = r.u32v();
         carId = r.u32v();
         place = r.u8v();
         name = r.str();
