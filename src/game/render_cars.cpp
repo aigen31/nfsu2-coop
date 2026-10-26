@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 
@@ -34,6 +35,14 @@ struct SavedCar {
     f32 basis[12] = {};
 };
 SavedCar g_saved[kMaxPuppets];
+// Model identity lives in a few dwords near the start of the car object:
+// +0x0C is the model name ("CELICA", "3000GT"), +0x10/+0x14/+0x20 point at the
+// per-model parameter tables. Copying them lets a borrowed traffic car wear the
+// player's model for one frame.
+constexpr u32 kModelFields[] = {0x0C, 0x10, 0x14, 0x20};
+constexpr int kModelFieldCount = 4;
+u32 g_savedModel[kMaxPuppets][kModelFieldCount] = {};
+bool g_modelSwap = false;
 volatile long g_renderCalls = 0;
 
 void write32(u8*& p, std::uint32_t v) { std::memcpy(p, &v, 4); p += 4; }
@@ -83,6 +92,15 @@ bool writeMem(u32 addr, const void* in, std::size_t n) {
 
 void applyPuppet(int slot, const PuppetTarget& t) {
     SavedCar& s = g_saved[slot];
+    if (g_modelSwap && g_localCar) {
+        for (int f = 0; f < kModelFieldCount; ++f) {
+            u32 src = 0, dst = 0;
+            if (!readMem(g_localCar + kModelFields[f], &src, sizeof(src))) continue;
+            if (!readMem(t.carPointer + kModelFields[f], &dst, sizeof(dst))) continue;
+            g_savedModel[slot][f] = dst;
+            writeMem(t.carPointer + kModelFields[f], &src, sizeof(src));
+        }
+    }
     if (!readMem(t.carPointer + 0x50, s.pos, sizeof(s.pos))) return;
     if (!readMem(t.carPointer + 0x60, s.pos2, sizeof(s.pos2))) return;
     if (!readMem(t.carPointer + 0x90, s.basis, sizeof(s.basis))) return;
@@ -139,6 +157,7 @@ bool CarRenderer::install(u32 renderVa) {
         return false;
     }
     g_jump = reinterpret_cast<std::uintptr_t>(g_trampoline);
+    g_modelSwap = std::getenv("NFSU2_COOP_MODEL_SWAP") != nullptr;
     if (MH_EnableHook(target) != MH_OK) {
         NFC_ERROR("render: MH_EnableHook failed");
         return false;
@@ -173,11 +192,16 @@ void CarRenderer::setTargets(u32 localCarPointer, const std::vector<PuppetTarget
 
 void CarRenderer::restorePuppets() {
     std::lock_guard<std::mutex> lock(g_mutex);
-    for (SavedCar& s : g_saved) {
+    for (int i = 0; i < kMaxPuppets; ++i) {
+        SavedCar& s = g_saved[i];
         if (!s.valid) continue;
         writeMem(s.car + 0x50, s.pos, sizeof(s.pos));
         writeMem(s.car + 0x60, s.pos2, sizeof(s.pos2));
         writeMem(s.car + 0x90, s.basis, sizeof(s.basis));
+        if (g_modelSwap) {
+            for (int f = 0; f < kModelFieldCount; ++f)
+                writeMem(s.car + kModelFields[f], &g_savedModel[i][f], sizeof(u32));
+        }
         s.valid = false;
     }
 }
@@ -188,3 +212,4 @@ void CarRenderer::clear() {
 }
 
 }  // namespace nfc
+
