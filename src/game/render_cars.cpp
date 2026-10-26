@@ -58,8 +58,8 @@ std::vector<RISave> g_riSaved[kMaxPuppets];
 // +0x0C is the model name ("CELICA", "3000GT"), +0x10/+0x14/+0x20 point at the
 // per-model parameter tables. Copying them lets a borrowed traffic car wear the
 // player's model for one frame.
-constexpr u32 kModelFields[] = {0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C, 0x20, 0x2C};
-constexpr int kModelFieldCount = 8;
+constexpr u32 kModelFields[] = {0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C, 0x20, 0x2C};
+constexpr int kModelFieldCount = 9;
 u32 g_savedModel[kMaxPuppets][kModelFieldCount] = {};
 bool g_modelSwap = false;
 bool g_modelSwapCfg = false;
@@ -140,8 +140,20 @@ void applyPuppet(int slot, const PuppetTarget& t, u32 ri) {
     if (g_cloneMode && g_localCar && g_clone) {
         // Point the game at OUR copy of the local car object: same model and
         // materials as the player, different position, and the live car object
-        // is never touched.
-        if (readMem(g_localCar, reinterpret_cast<void*>(static_cast<std::uintptr_t>(g_clone)), 0x1000)) {
+        // is never touched. The heap block may be smaller than 0x1000, so copy
+        // only what VirtualQuery says is committed.
+        SIZE_T n = 0;
+        {
+            MEMORY_BASIC_INFORMATION mbi{};
+            if (VirtualQuery(reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(g_localCar)), &mbi, sizeof(mbi)) &&
+                mbi.State == MEM_COMMIT && mbi.RegionSize > 0) {
+                const std::uintptr_t base = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
+                const std::uintptr_t at = static_cast<std::uintptr_t>(g_localCar);
+                const std::size_t avail = static_cast<std::size_t>(mbi.RegionSize - (at - base));
+                n = avail < 0x1000 ? avail : 0x1000;
+            }
+        }
+        if (n && readMem(g_localCar, reinterpret_cast<void*>(static_cast<std::uintptr_t>(g_clone)), n)) {
             f32 pos[3] = {t.pos.x, t.pos.y, t.pos.z};
             const f32 c = std::cos(t.yaw), sn = std::sin(t.yaw);
             f32 basis[12] = {c, -sn, 0, 0, sn, c, 0, 0, 0, 0, 1, 0};
@@ -261,15 +273,10 @@ bool CarRenderer::install(u32 renderVa, bool modelSwap) {
             pos = comma + 1;
         }
     }
-    if (g_swapOffsets.empty()) {
-        // Verified on the reference build: the model tables/geometry the render
-        // info uses live at +0x04 and +0x08; copying them makes the borrowed car
-        // draw with the local player's model.
-        g_swapOffsets = {0x04, 0x08};
-        NFC_INFO("render: using built-in render-info swap offsets 0x04,0x08");
-    } else {
-        NFC_INFO("render: render-info swap offsets: %zu", g_swapOffsets.size());
-    }
+    // No built-in swap: experiments showed the model is bound at spawn, and
+    // writing these fields is not safe in every process. Opt in with
+    // NFSU2_COOP_SWAP=0x04,0x08 while experimenting.
+    if (!g_swapOffsets.empty()) NFC_INFO("render: render-info swap offsets: %zu", g_swapOffsets.size());
     if (MH_EnableHook(target) != MH_OK) {
         NFC_ERROR("render: MH_EnableHook failed");
         return false;
@@ -327,6 +334,9 @@ void CarRenderer::clear() {
 }
 
 }  // namespace nfc
+
+
+
 
 
 
