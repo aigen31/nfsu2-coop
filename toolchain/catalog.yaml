@@ -1,0 +1,151 @@
+// Toolchain catalog — every tool this project needs, why, and where it comes from.
+// `toolchain/install.ps1` installs the bundled ones (pinned by SHA-256) and the
+// Python test dependencies; the "recommended" ones are manual installs from
+// official sources, listed so nobody has to guess what a reverse engineer needs.
+schema: 1
+project: nfsu2-coop
+updated: "2026-10-27"
+installer: toolchain/install.ps1
+
+bundled:
+  - id: mingw-w64-i686
+    role: compiler
+    version: "GCC 16.2.0, winlibs i686-posix-dwarf, UCRT 14.0.0, r3"
+    url: "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.2.0posix-23.1.3-14.0.0-ucrt-r3/winlibs-i686-posix-dwarf-gcc-16.2.0-llvm-23.1.3-mingw-w64ucrt-14.0.0-r3.zip"
+    sha256: "9353F386F7A678AB41B0746DB43211C4B6B8AB2811D2EDB289F0496711FB1C9B"
+    size_mb: 408
+    install_path: "C:\\nfsu2-toolchain"
+    why: "Builds the x86 .asi, the host, the bots and the tests. GCC must live in a path without spaces, hence the fixed prefix plus a junction in toolchain\\mingw32."
+    license: "GPLv3 + GCC Runtime Library Exception"
+
+  - id: enet
+    role: transport library
+    version: "1.3.18"
+    url: "https://github.com/lsalzman/enet/archive/refs/tags/v1.3.18.zip"
+    sha256: "32D6B15611C2667B88CD865E0CB48C3C011DDEFCFF6DFBDB266B8E0B04FFFAB3"
+    size_mb: 1
+    install_path: "vendor/enet"
+    why: "Reliable-ordered + unreliable-sequenced UDP channels, fragmentation, RTT, peer timeout. Used by the host, the bots and the plugin."
+    license: "MIT"
+
+  - id: minhook
+    role: x86 detour library
+    version: "1.3.4"
+    url: "https://github.com/TsudaKageyu/minhook/archive/refs/tags/v1.3.4.zip"
+    sha256: "172708123DAA0C98D20D3A980B16A50BE14AF243DC95DEE6F79C24193AD010E4"
+    size_mb: 1
+    install_path: "vendor/minhook"
+    why: "Hooks IDirect3DDevice9::EndScene for the HUD with a trampoline that chains with other mods."
+    license: "BSD-2-Clause"
+
+  - id: imgui
+    role: HUD
+    version: "1.91.9b"
+    url: "https://github.com/ocornut/imgui/archive/refs/tags/v1.91.9b.zip"
+    sha256: "FD37507C8476A6D14CC7C4B352401F31BCBD0F0D995D35390811E968C466F46E"
+    size_mb: 2
+    install_path: "vendor/imgui"
+    why: "Overlay text and tables for connection, standings and career state."
+    license: "MIT"
+
+python:
+  - id: pytest
+    version: ">=9"
+    why: "unused by the native suite, kept for the Python tooling in coop-anything/tools"
+  - id: pyyaml
+    version: ">=6"
+    why: "regenerates coop-anything DIRECTORY.md from data/directory.yaml"
+  - id: pefile
+    version: ">=2024"
+    why: "ad-hoc PE inspection while hunting offsets (the shipped probe has its own parser)"
+
+recommended:
+  - id: ghidra
+    role: decompiler
+    version: "11.x"
+    url: "https://github.com/NationalSecurityAgency/ghidra/releases"
+    why: "Decompile speed2.exe around the anchors; find the player car pointer chain and the event launcher."
+    license: "Apache-2.0"
+  - id: x64dbg
+    role: debugger
+    version: "latest snapshot"
+    url: "https://github.com/x64dbg/x64dbg/releases"
+    why: "32-bit debugger: break on Player::ClearZone (0x5FFE70), walk `this`, dump the car object."
+    license: "GPLv3"
+  - id: cheat-engine
+    role: memory scanner
+    version: "7.x"
+    url: "https://www.cheatengine.org/downloads.php"
+    why: "Pointer scan for the player car and the traffic list on a live game."
+    license: "proprietary, free"
+  - id: system-informer
+    role: process/handle inspector
+    version: "latest"
+    url: "https://github.com/winsiderss/systeminformer/releases"
+    why: "Processes, threads, modules, memory map while the game runs."
+    license: "MIT"
+  - id: frida
+    role: dynamic instrumentation
+    version: "16.x"
+    url: "https://github.com/frida/frida/releases"
+    why: "Quick experiments in the game process without rebuilding the .asi."
+    license: "wxWindows Library Licence"
+  - id: rea
+    role: reverse-engineering MCP for agents
+    version: "latest"
+    url: "https://github.com/morluto/rea"
+    why: "Co-op Anything's recommended RE agent bridge (`npx rea-agents setup`)."
+    license: "see repo"
+  - id: nfs-vlted
+    role: NFS data editor
+    version: "4.x"
+    url: "https://nfs-tools.blogspot.com/p/downloads.html"
+    why: "Reads/edits NFSU2 .ini/.bin game data (event list, tracks, traffic density)."
+    license: "freeware"
+  - id: wireshark
+    role: packet capture
+    version: "4.x"
+    url: "https://www.wireshark.org/download.html"
+    why: "See the mod's UDP traffic when a peer never converges."
+    license: "GPLv2"
+  - id: clumsy
+    role: network chaos on Windows
+    version: "0.3"
+    url: "https://jagt.github.io/clumsy/"
+    why: "Lag/loss/duplicate the real game's traffic when the built-in chaos proxy is not enough."
+    license: "MIT"
+  - id: ultimate-asi-loader
+    role: mod loader
+    version: "9.x"
+    url: "https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases"
+    why: "Loads NFSU2Coop.asi from <game>\\scripts. Already present in this install as dinput8.dll (shipped with the Widescreen Fix)."
+    license: "MIT"
+  - id: nfsu2-widescreen-fix
+    role: display fix / ASI loader
+    version: "installed build"
+    url: "https://github.com/ThirteenAG/WidescreenFixesPack/releases"
+    why: "Already installed here; provides dinput8.dll (ASI loader) and fixes the HUD aspect."
+    license: "see repo"
+  - id: steamworks-sdk
+    role: relay networking
+    version: "1.60+"
+    url: "https://partner.steamgames.com/downloads/list"
+    why: "Steam Spacewar relay (coop-anything playbook/networking-steam-spacewar.md) so friends join without port forwarding. Needs a Steam partner account, so it is not bundled."
+    license: "Valve SDK licence"
+  - id: nucleus-coop
+    role: split-screen option
+    version: "latest"
+    url: "https://github.com/SplitScreen-Me/splitscreenme-nucleus"
+    why: "Two copies on one PC with two controllers, the fallback when online sync is not wanted."
+    license: "GPLv3"
+  - id: visual-studio-build-tools
+    role: alternative compiler
+    version: "2022"
+    url: "https://visualstudio.microsoft.com/downloads/"
+    why: "Optional. The shipped build uses MinGW and is tested here; MSVC works via CMakeLists.txt."
+    license: "Microsoft"
+
+notes:
+  - "Pinned downloads are checked against the SHA-256 above before extraction; a mismatch aborts the install."
+  - "vendor/ is committed source (MIT/BSD), not a package manager cache, so a clone builds without network."
+  - "The .asi must be 32-bit: speed2.exe is i386 (PE machine 0x014C)."

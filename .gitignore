@@ -1,0 +1,8 @@
+build/
+toolchain/cache/
+toolchain/INSTALLED.json
+toolchain/mingw32
+*.log
+*.pdb
+*.ilk
+.vs/
