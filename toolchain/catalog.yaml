@@ -59,7 +59,15 @@ python:
     version: ">=2024"
     why: "ad-hoc PE inspection while hunting offsets (the shipped probe has its own parser)"
 
-recommended:
+installed:  - id: x64dbg
+    role: debugger (installed)
+    version: "snapshot 2026-05-27"
+    url: "https://github.com/x64dbg/x64dbg/releases/download/2026.05.27/snapshot_2026-05-27_12-11.zip"
+    sha256: "D41966DFC5B435A372798245300CA0AB7BB8E48BDBF48512C6FB20FCCA427697"
+    size_mb: 30
+    install_path: "toolchain/tools/x64dbg"
+    why: "32-bit debugger (release/x32/x32dbg.exe) for hardware write watchpoints: find the car spawn function, where the model is bound. release/x32/headless.exe is a console front-end for scripted attach."
+    license: "GPLv3"recommended:
   - id: ghidra
     role: decompiler
     version: "11.x"
@@ -149,3 +157,4 @@ notes:
   - "Pinned downloads are checked against the SHA-256 above before extraction; a mismatch aborts the install."
   - "vendor/ is committed source (MIT/BSD), not a package manager cache, so a clone builds without network."
   - "The .asi must be 32-bit: speed2.exe is i386 (PE machine 0x014C)."
+

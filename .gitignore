@@ -6,3 +6,5 @@ toolchain/mingw32
 *.pdb
 *.ilk
 .vs/
+
+toolchain/tools/
