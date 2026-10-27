@@ -251,7 +251,8 @@ void __thiscall detourBuild(void* car, std::uint32_t model) {
     static volatile long calls = 0;
     const long n = InterlockedIncrement(&calls);
     if (n <= 128)
-        NFC_INFO("render: build #%ld car %08X model %08X%s", n, carPtr, model,
+        NFC_INFO("render: build #%ld car %08X model %08X caller %08X%s", n, carPtr, model,
+                 static_cast<u32>(reinterpret_cast<std::uintptr_t>(__builtin_return_address(0))),
                  (g_localCar && carPtr == g_localCar) ? " LOCAL" : "");
     bool known = false;
     for (long i = 0; i < g_carModelCount && i < 64; ++i)

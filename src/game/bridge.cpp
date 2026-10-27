@@ -249,6 +249,65 @@ bool Bridge::start(std::uint16_t port) {
         return r;
     });
 
+    // The world keeps cars as nodes in DAT_00890080 (counts at +0x10/+0x14/+0x18, array at
+    // +0x1c). Each node points at its car data (+0x10) and car object (+0x14). This dumps
+    // them so we can find the node behind a render-list car.
+    g_server.Register("world.cars", [](const coopbridge::json::Value&) {
+        auto out = coopbridge::json::Value::array();
+        std::uint32_t world = 0;
+        if (!readMem(0x00890080, &world, sizeof(world)) || !world)
+            throw coopbridge::Error(-32017, "world not ready");
+        std::int32_t lo = 0, hi = 0, count = 0;
+        readMem(world + 0x10, &count, sizeof(count));
+        readMem(world + 0x14, &lo, sizeof(lo));
+        readMem(world + 0x18, &hi, sizeof(hi));
+        if (lo < 0 || hi < lo || hi - lo > 64) return out;
+        for (std::int32_t i = lo; i < hi; ++i) {
+            std::uint32_t node = 0, data = 0, car = 0, model = 0, idx = 0;
+            if (!readMem(world + 0x1c + static_cast<std::uint32_t>(i - lo) * 4, &node, sizeof(node)) || !node) continue;
+            readMem(node + 0x10, &data, sizeof(data));
+            readMem(node + 0x14, &car, sizeof(car));
+            if (data) readMem(data, &model, sizeof(model));
+            readMem(node + 0x08, &idx, sizeof(idx));
+            auto e = coopbridge::json::Value::object();
+            e.set("i", static_cast<std::int64_t>(i));
+            e.set("node", static_cast<std::int64_t>(node));
+            e.set("data", static_cast<std::int64_t>(data));
+            e.set("car", static_cast<std::int64_t>(car));
+            e.set("model", static_cast<std::int64_t>(model));
+            e.set("index", static_cast<std::int64_t>(idx));
+            out.push(e);
+        }
+        return out;
+    });
+
+    // Set the car's model table (car+0x10) and rebuild its render object the same way the
+    // game does at spawn: FUN_0063A5A0(car, *(car+0x10)).
+    g_server.Register("car.setModel", [](const coopbridge::json::Value& p) {
+        const std::uint32_t slot = static_cast<std::uint32_t>(p.get("slot").asInt(1));
+        std::uint32_t car = 0;
+        if (!readMem(0x89CCF8 + slot * 4, &car, sizeof(car)) || !car)
+            throw coopbridge::Error(-32013, "no car in that slot");
+        std::uint32_t model = static_cast<std::uint32_t>(p.get("model").asInt(0));
+        if (!model) throw coopbridge::Error(-32016, "model required");
+        std::uint32_t oldModel = 0;
+        readMem(car + 0x10, &oldModel, sizeof(oldModel));
+        writeMem(car + 0x10, &model, sizeof(model));
+        using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
+        reinterpret_cast<ReloadFn>(static_cast<std::uintptr_t>(0x0063A5A0))(
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)), model);
+        auto r = coopbridge::json::Value::object();
+        r.set("car", static_cast<std::int64_t>(car));
+        r.set("oldModel", static_cast<std::int64_t>(oldModel));
+        r.set("model", static_cast<std::int64_t>(model));
+        std::uint32_t d = 0, np = 0;
+        if (readMem(car + 0x554, &d, sizeof(d)) && d && readMem(d + 0x08, &np, sizeof(np)) && np) {
+            char nm[32] = {};
+            if (readMem(np, nm, sizeof(nm) - 1)) r.set("descName", std::string(nm));
+        }
+        return r;
+    });
+
     g_server.Register("car.slots", [](const coopbridge::json::Value&) { return slotList(); });
     g_server.Register("car.name", [](const coopbridge::json::Value& p) {
         std::uint32_t car = static_cast<std::uint32_t>(p.get("car").asInt());
