@@ -8,3 +8,5 @@ toolchain/mingw32
 .vs/
 
 toolchain/tools/
+
+../references/

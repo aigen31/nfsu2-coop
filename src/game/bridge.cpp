@@ -308,6 +308,61 @@ bool Bridge::start(std::uint16_t port) {
         return r;
     });
 
+    // GetCarTypeInfo(CarTypeID) @ 0x610110 gives the game's own car-type record (name at +0).
+    g_server.Register("game.carType", [](const coopbridge::json::Value& p) {
+        const int id = static_cast<int>(p.get("id").asInt(0));
+        using Fn = void* (*)(int);
+        auto fn = reinterpret_cast<Fn>(static_cast<std::uintptr_t>(0x610110));
+        void* info = fn(id);
+        auto r = coopbridge::json::Value::object();
+        r.set("id", static_cast<std::int64_t>(id));
+        r.set("ptr", static_cast<std::int64_t>(reinterpret_cast<std::uintptr_t>(info)));
+        if (info) {
+            char name[40] = {};
+            if (readMem(static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(info)), name, sizeof(name) - 1))
+                r.set("name", std::string(name));
+            std::uint32_t hash = 0;
+            if (readMem(static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(info)) + 0xC0, &hash, sizeof(hash)))
+                r.set("hash", static_cast<std::int64_t>(hash));
+        }
+        return r;
+    });
+
+    // car+0x0C is the CarTypeInfo* (its first field is the type name). Swapping it and
+    // rebuilding the render object is the game's own way to change a car's model.
+    g_server.Register("car.setType", [](const coopbridge::json::Value& p) {
+        const std::uint32_t slot = static_cast<std::uint32_t>(p.get("slot").asInt(1));
+        const int typeId = static_cast<int>(p.get("type").asInt(0));
+        std::uint32_t car = 0;
+        if (!readMem(0x89CCF8 + slot * 4, &car, sizeof(car)) || !car)
+            throw coopbridge::Error(-32013, "no car in that slot");
+        using TypeFn = void* (*)(int);
+        void* info = reinterpret_cast<TypeFn>(static_cast<std::uintptr_t>(0x610110))(typeId);
+        if (!info) throw coopbridge::Error(-32018, "no such car type");
+        const std::uint32_t infoPtr = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(info));
+        std::uint32_t oldType = 0;
+        readMem(car + 0x0C, &oldType, sizeof(oldType));
+        writeMem(car + 0x0C, &infoPtr, sizeof(infoPtr));
+        // Player cars share the base render table (0x890170/0x890160); the model itself
+        // comes from CarTypeInfo at car+0x0C.
+        std::uint32_t model = 0x00890170u, model2 = 0x00890160u;
+        writeMem(car + 0x10, &model, sizeof(model));
+        writeMem(car + 0x14, &model2, sizeof(model2));
+        using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
+        reinterpret_cast<ReloadFn>(static_cast<std::uintptr_t>(0x0063A5A0))(
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)), model);
+        auto r = coopbridge::json::Value::object();
+        r.set("car", static_cast<std::int64_t>(car));
+        r.set("oldType", static_cast<std::int64_t>(oldType));
+        r.set("type", static_cast<std::int64_t>(infoPtr));
+        std::uint32_t d = 0, np = 0;
+        if (readMem(car + 0x554, &d, sizeof(d)) && d && readMem(d + 0x08, &np, sizeof(np)) && np) {
+            char nm[32] = {};
+            if (readMem(np, nm, sizeof(nm) - 1)) r.set("descName", std::string(nm));
+        }
+        return r;
+    });
+
     g_server.Register("car.slots", [](const coopbridge::json::Value&) { return slotList(); });
     g_server.Register("car.name", [](const coopbridge::json::Value& p) {
         std::uint32_t car = static_cast<std::uint32_t>(p.get("car").asInt());
