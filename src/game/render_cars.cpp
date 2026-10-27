@@ -328,6 +328,7 @@ u32 rideInfoOfCar(u32 car) {
 
 u32 CarRenderer::rideInfoOf(u32 car) const { return rideInfoOfCar(car); }
 
+
 bool CarRenderer::install(u32 renderVa, bool modelSwap) {
     if (MH_CreateHook(reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(0x00638190)),
                       reinterpret_cast<LPVOID>(&detourCtor), reinterpret_cast<LPVOID*>(&g_origCtor)) == MH_OK &&
@@ -451,8 +452,8 @@ struct RideJob {
     u32 type = 0;
     u32 handle = 0;
     u32 startedMs = 0;
+    u32 ride = 0;  // allocated with the game's own allocator (the CarLoader may free it)
     int state = 0;  // 0 idle, 1 loading, 2 applied
-    u8 ride[0x900] = {};
 };
 RideJob g_rideJobs[kMaxPuppets];
 
@@ -471,25 +472,36 @@ u32 loaderEntry(u32 handle) {
 
 void startRideLoad(int slot, u32 car, u32 type) {
     RideJob& j = g_rideJobs[slot];
-    std::memset(j.ride, 0, sizeof(j.ride));
+    using MallocFn = void*(__cdecl*)(unsigned);
+    void* mem = reinterpret_cast<MallocFn>(static_cast<std::uintptr_t>(0x575620))(0x900u);
+    if (!mem) {
+        NFC_WARN("render: RideInfo allocation failed for type %u", type);
+        return;
+    }
+    std::memset(mem, 0, 0x900);
+    j.ride = static_cast<u32>(reinterpret_cast<std::uintptr_t>(mem));
     using InitFn = void(__thiscall*)(void*, int, int, int, int);
-    reinterpret_cast<InitFn>(kRideInit)(j.ride, static_cast<int>(type), 1, 0, 0);
+    reinterpret_cast<InitFn>(kRideInit)(mem, static_cast<int>(type), 1, 0, 0);
+    // Skin composite slot: take it from the local player's car (nfsu2-web uses the player's
+    // racer index + 1); a traffic car's index would name a DUMMY_SKIN that does not exist.
     u32 carField = 0, slotNo = 1;
-    if (readMem(car + 0x14, &carField, sizeof(carField)) && carField >= 0x890160u)
-        slotNo = (carField - 0x890160u) / 0x940u + 1u;
+    if (g_localCar && readMem(g_localCar + 0x14, &carField, sizeof(carField)) && carField >= 0x890160u) {
+        const u32 candidate = (carField - 0x890160u) / 0x940u + 1u;
+        if (candidate >= 1 && candidate <= 4) slotNo = candidate;
+    }
     using SkinFn = void(__thiscall*)(void*, u32);
-    reinterpret_cast<SkinFn>(kRideSkins)(j.ride, slotNo);
+    reinterpret_cast<SkinFn>(kRideSkins)(mem, slotNo);
     using PartsFn = void(__thiscall*)(void*, int);
-    reinterpret_cast<PartsFn>(kRideStockParts)(j.ride, 0);
+    reinterpret_cast<PartsFn>(kRideStockParts)(mem, 0);
     using LoadFn = u32(__thiscall*)(void*, void*, u32, u32);
-    j.handle = reinterpret_cast<LoadFn>(kLoaderLoad)(reinterpret_cast<void*>(kCarLoader), j.ride, 0, 0);
+    j.handle = reinterpret_cast<LoadFn>(kLoaderLoad)(reinterpret_cast<void*>(kCarLoader), mem, 0, 0);
     using ServiceFn = void(__thiscall*)(void*, u32, u32);
     reinterpret_cast<ServiceFn>(kLoaderService)(reinterpret_cast<void*>(kCarLoader), 0, 0);
     j.car = car;
     j.type = type;
     j.startedMs = GetTickCount();
     j.state = 1;
-    NFC_INFO("render: streaming type %u for car %08X (handle %u)", type, car, j.handle);
+    NFC_INFO("render: streaming type %u for car %08X (ride %08X, handle %u, skin slot %u)", type, car, j.ride, j.handle, slotNo);
 }
 
 bool tickRideLoad(int slot) {
@@ -511,7 +523,8 @@ bool tickRideLoad(int slot) {
     using WaitFn = void(__thiscall*)(void*, u32);
     reinterpret_cast<WaitFn>(kLoaderWait)(reinterpret_cast<void*>(kCarLoader), j.handle);
     using SetRideFn = void(__thiscall*)(void*, void*);
-    reinterpret_cast<SetRideFn>(kCarSetRide)(reinterpret_cast<void*>(j.car), j.ride);
+    reinterpret_cast<SetRideFn>(kCarSetRide)(reinterpret_cast<void*>(j.car),
+                                             reinterpret_cast<void*>(static_cast<std::uintptr_t>(j.ride)));
     j.state = 2;
     NFC_INFO("render: type %u applied to car %08X", j.type, j.car);
     return true;
@@ -548,6 +561,16 @@ void reloadPuppetModel(int slot, u32 car, u32 typeId) {
     reinterpret_cast<UpdFn>(static_cast<std::uintptr_t>(0x634800))(
         reinterpret_cast<void*>(static_cast<std::uintptr_t>(renderInfo)));
     NFC_INFO("render: car %08X now shows type %u (ride %08X)", car, typeId, ride);
+}
+
+bool CarRenderer::streamType(int slot, u32 car, u32 type) {
+    if (slot < 0 || slot >= kMaxPuppets || !car || !type) return false;
+    RideJob& j = g_rideJobs[slot];
+    if (j.state == 1 && j.car == car && j.type == type) return tickRideLoad(slot);
+    if (j.state == 2 && j.car == car && j.type == type) return true;
+    if (j.state != 0) return false;
+    startRideLoad(slot, car, type);
+    return false;
 }
 
 void CarRenderer::restorePuppets() {

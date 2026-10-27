@@ -477,6 +477,20 @@ bool Bridge::start(std::uint16_t port) {
         return r;
     });
 
+    g_server.Register("car.streamType", [](const coopbridge::json::Value& p) {
+        const int slot = static_cast<int>(p.get("slot").asInt(1));
+        const std::uint32_t type = static_cast<std::uint32_t>(p.get("type").asInt(0));
+        std::uint32_t car = 0;
+        if (!readMem(0x89CCF8 + static_cast<std::uint32_t>(slot) * 4, &car, sizeof(car)) || !car)
+            throw coopbridge::Error(-32013, "no car in that slot");
+        const bool done = CarRenderer::instance().streamType(slot, car, type);
+        auto r = coopbridge::json::Value::object();
+        r.set("car", static_cast<std::int64_t>(car));
+        r.set("type", static_cast<std::int64_t>(type));
+        r.set("done", done);
+        return r;
+    });
+
     g_server.Register("car.slots", [](const coopbridge::json::Value&) { return slotList(); });
     g_server.Register("car.name", [](const coopbridge::json::Value& p) {
         std::uint32_t car = static_cast<std::uint32_t>(p.get("car").asInt());

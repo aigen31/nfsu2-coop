@@ -28,6 +28,7 @@ public:
 
     bool install(u32 renderVa, bool modelSwap = false);
     u32 rideInfoOf(u32 car) const;
+    bool streamType(int slot, u32 car, u32 type);  // load+apply a model by hand (tests)
     void shutdown();
     bool ready() const { return installed_; }
 
