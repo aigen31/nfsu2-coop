@@ -416,16 +416,106 @@ u32 findRideInfo(u32 typeId) {
     return 0;
 }
 
+// Streaming a model the district has not loaded yet, the way nfsu2-web does it
+// (references/nfsu2-web/runtime/roam.c): build a stock RideInfo, stream it through the
+// CarLoader and apply it with Car::SetRideInfo, which rebuilds the render info and physics.
+constexpr std::uintptr_t kRideInit = 0x610270;        // thiscall(ride, type, 1, 0, 0)
+constexpr std::uintptr_t kRideSkins = 0x61C280;       // thiscall(ride, skinSlot)
+constexpr std::uintptr_t kRideStockParts = 0x637040;  // thiscall(ride, 0)
+constexpr std::uintptr_t kCarLoader = 0x8A3288;       // the CarLoader instance
+constexpr std::uintptr_t kLoaderLoad = 0x63BC70;      // thiscall(loader, ride, 0, 0) -> handle
+constexpr std::uintptr_t kLoaderService = 0x63BCD0;   // thiscall(loader, 0, 0)
+constexpr std::uintptr_t kLoaderLoaded = 0x610910;    // thiscall(loader, entry) -> 1 when loaded
+constexpr std::uintptr_t kLoaderWait = 0x61CA50;      // thiscall(loader, handle)
+constexpr std::uintptr_t kCarSetRide = 0x601110;      // thiscall(car, ride)
+
+struct RideJob {
+    u32 car = 0;
+    u32 type = 0;
+    u32 handle = 0;
+    u32 startedMs = 0;
+    int state = 0;  // 0 idle, 1 loading, 2 applied
+    u8 ride[0x900] = {};
+};
+RideJob g_rideJobs[kMaxPuppets];
+
+u32 loaderEntry(u32 handle) {
+    const u32 head = static_cast<u32>(kCarLoader) + 0x58u;
+    u32 e = 0;
+    if (!readMem(head, &e, sizeof(e))) return 0;
+    for (int k = 0; e && e != head && k < 64; ++k) {
+        u32 h = 0;
+        if (!readMem(e + 0x123C, &h, sizeof(h))) return 0;
+        if (h == handle) return e;
+        if (!readMem(e, &e, sizeof(e))) return 0;
+    }
+    return 0;
+}
+
+void startRideLoad(int slot, u32 car, u32 type) {
+    RideJob& j = g_rideJobs[slot];
+    std::memset(j.ride, 0, sizeof(j.ride));
+    using InitFn = void(__thiscall*)(void*, int, int, int, int);
+    reinterpret_cast<InitFn>(kRideInit)(j.ride, static_cast<int>(type), 1, 0, 0);
+    u32 carField = 0, slotNo = 1;
+    if (readMem(car + 0x14, &carField, sizeof(carField)) && carField >= 0x890160u)
+        slotNo = (carField - 0x890160u) / 0x940u + 1u;
+    using SkinFn = void(__thiscall*)(void*, u32);
+    reinterpret_cast<SkinFn>(kRideSkins)(j.ride, slotNo);
+    using PartsFn = void(__thiscall*)(void*, int);
+    reinterpret_cast<PartsFn>(kRideStockParts)(j.ride, 0);
+    using LoadFn = u32(__thiscall*)(void*, void*, u32, u32);
+    j.handle = reinterpret_cast<LoadFn>(kLoaderLoad)(reinterpret_cast<void*>(kCarLoader), j.ride, 0, 0);
+    using ServiceFn = void(__thiscall*)(void*, u32, u32);
+    reinterpret_cast<ServiceFn>(kLoaderService)(reinterpret_cast<void*>(kCarLoader), 0, 0);
+    j.car = car;
+    j.type = type;
+    j.startedMs = GetTickCount();
+    j.state = 1;
+    NFC_INFO("render: streaming type %u for car %08X (handle %u)", type, car, j.handle);
+}
+
+bool tickRideLoad(int slot) {
+    RideJob& j = g_rideJobs[slot];
+    if (j.state != 1) return false;
+    const u32 entry = loaderEntry(j.handle);
+    u32 loaded = 0;
+    if (entry) {
+        using LoadedFn = u32(__thiscall*)(void*, u32);
+        loaded = reinterpret_cast<LoadedFn>(kLoaderLoaded)(reinterpret_cast<void*>(kCarLoader), entry);
+    }
+    if (!loaded) {
+        if (GetTickCount() - j.startedMs > 12000) {
+            NFC_WARN("render: type %u did not load in time", j.type);
+            j.state = 0;
+        }
+        return false;
+    }
+    using WaitFn = void(__thiscall*)(void*, u32);
+    reinterpret_cast<WaitFn>(kLoaderWait)(reinterpret_cast<void*>(kCarLoader), j.handle);
+    using SetRideFn = void(__thiscall*)(void*, void*);
+    reinterpret_cast<SetRideFn>(kCarSetRide)(reinterpret_cast<void*>(j.car), j.ride);
+    j.state = 2;
+    NFC_INFO("render: type %u applied to car %08X", j.type, j.car);
+    return true;
+}
+
 void reloadPuppetModel(int slot, u32 car, u32 typeId) {
     if (!g_modelSwap || !car || !typeId) return;
     if (g_reloadedCar[slot] == car && g_reloadedModel[slot] == typeId) return;
     const u32 ride = findRideInfo(typeId);
     if (!ride) {
-        static u32 logged[kMaxPuppets] = {};
-        if (logged[slot] != typeId) {
-            logged[slot] = typeId;
-            NFC_INFO("render: type %u is not loaded in this district, cannot show it on car %08X", typeId, car);
+        RideJob& j = g_rideJobs[slot];
+        if (j.state == 1 && j.car == car && j.type == typeId) {
+            tickRideLoad(slot);
+            return;
         }
+        if (j.state == 2 && j.car == car && j.type == typeId) {
+            g_reloadedCar[slot] = car;
+            g_reloadedModel[slot] = typeId;
+            return;
+        }
+        if (j.state == 0) startRideLoad(slot, car, typeId);
         return;
     }
     u32 renderInfo = 0;
