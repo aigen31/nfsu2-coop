@@ -1,5 +1,7 @@
 #include "nfsu2_bindings.h"
 
+#include "render_cars.h"
+
 #include <cstdio>
 #include <cstring>
 
@@ -116,6 +118,11 @@ u32 Nfsu2Game::carModel() const {
     if (!b_.carBound()) return 0;
     const u32 car = carAt(b_.carIndex);
     if (!car) return 0;
+    const u32 ride = CarRenderer::instance().rideInfoOf(car);
+    if (ride) {
+        u32 typeId = 0;
+        if (safeRead(at(ride), &typeId, sizeof(typeId)) && typeId < 256) return typeId;
+    }
     u32 namePtr = 0;
     char name[32] = {};
     if (!safeRead(at(car + 0x0C), &namePtr, sizeof(namePtr)) || !namePtr) return 0;

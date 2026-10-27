@@ -402,60 +402,45 @@ constexpr std::uintptr_t kReloadModelVa = 0x0063A5A0;
 u32 g_reloadedCar[kMaxPuppets] = {};
 u32 g_reloadedModel[kMaxPuppets] = {};
 
-const char* modelNameOf(u32 id) {
-    struct Entry { u32 id; const char* name; };
-    static const Entry kTable[] = {
-        {0x00890170, "CELICA"}, {0x00890AB0, "MIATA"}, {0x008913F0, "GOLF"}, {0x00891D30, "CIVIC"},
-        {0x00892670, "TAXI"}, {0x00892FB0, "4DR_SEDAN"}, {0x00894230, "SUV"}, {0x00894B70, "PICKUP"},
-        {0x008954B0, "HATCHBACK02"}, {0x00896730, "4DR_SEDAN02"}, {0x00897070, "HATCHBACK"},
-    };
-    for (const Entry& e : kTable)
-        if (e.id == id) return e.name;
-    return nullptr;
-}
-
-std::string descNameOf(u32 car) {
-    u32 root = 0, desc = 0, namePtr = 0;
-    char name[32] = {};
-    if (!readMem(car, &root, sizeof(root)) || !root) return {};
-    if (!readMem(root + 0x554, &desc, sizeof(desc)) || !desc) return {};
-    if (!readMem(desc + 0x08, &namePtr, sizeof(namePtr)) || !namePtr) return {};
-    if (!readMem(namePtr, name, sizeof(name) - 1)) return {};
-    return std::string(name);
-}
-
-// Rebuild the car's visual root until its descriptor really names the wanted model.
-// The game can re-create the root after us (traffic recycling), so this verifies and
-// retries with a cooldown instead of trusting one call.
-void reloadPuppetModel(int slot, u32 car, u32 wantedModel) {
-    if (!g_modelSwap || !car) return;
-    u32 model = wantedModel;
-    if (!model) {
-        if (!g_localCar) return;
-        u32 desc = 0;
-        if (!readMem(g_localCar + 0x554, &desc, sizeof(desc)) || !desc) return;
-        if (!readMem(desc + 0x04, &model, sizeof(model)) || !model) return;
+// The network carries the owner's CarTypeID. Each type loaded in this district has a
+// RideInfo in .data (0x890170 + n*0x940, [0] = CarTypeID). Rebuilding with it is the game's
+// own way to give a car another model (CarRenderInfo_ctor 0x638190 + UpdateCarParts 0x634800).
+u32 findRideInfo(u32 typeId) {
+    for (u32 n = 0; n < 64; ++n) {
+        const u32 entry = 0x00890170u + n * 0x940u;
+        u32 id = 0, next = 0;
+        if (!readMem(entry, &id, sizeof(id))) break;
+        if (!readMem(entry + 4, &next, sizeof(next))) continue;
+        if (id == typeId && next) return entry;
     }
-    const char* want = modelNameOf(model);
-    if (!want) return;
-    static u32 lastTryMs[kMaxPuppets] = {};
-    const u32 now = GetTickCount();
-    if (descNameOf(car) == want) {
-        g_reloadedCar[slot] = car;
-        g_reloadedModel[slot] = model;
+    return 0;
+}
+
+void reloadPuppetModel(int slot, u32 car, u32 typeId) {
+    if (!g_modelSwap || !car || !typeId) return;
+    if (g_reloadedCar[slot] == car && g_reloadedModel[slot] == typeId) return;
+    const u32 ride = findRideInfo(typeId);
+    if (!ride) {
+        static u32 logged[kMaxPuppets] = {};
+        if (logged[slot] != typeId) {
+            logged[slot] = typeId;
+            NFC_INFO("render: type %u is not loaded in this district, cannot show it on car %08X", typeId, car);
+        }
         return;
     }
-    // One attempt per (car, model): the traffic stand-in's visual root is a shared
-    // template that the engine rebuilds from traffic data, so retrying just churns.
-    if (g_reloadedCar[slot] == car && g_reloadedModel[slot] == model) return;
-    lastTryMs[slot] = now;
-    u32 root = 0;
-    if (!readMem(car, &root, sizeof(root)) || !root) return;
-    using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
-    reinterpret_cast<ReloadFn>(kReloadModelVa)(reinterpret_cast<void*>(static_cast<std::uintptr_t>(root)), model);
+    u32 renderInfo = 0;
+    if (!readMem(car + 0x554, &renderInfo, sizeof(renderInfo)) || !renderInfo) return;
     g_reloadedCar[slot] = car;
-    g_reloadedModel[slot] = model;  // one attempt per car/model, no per-frame churn
-    NFC_INFO("render: rebuilt car %08X root %08X with model %08X (%s), desc was '%s'", car, root, model, want, descNameOf(car).c_str());
+    g_reloadedModel[slot] = typeId;
+    using CtorFn = void*(__thiscall*)(void*, void*, void*);
+    reinterpret_cast<CtorFn>(static_cast<std::uintptr_t>(0x638190))(
+        reinterpret_cast<void*>(static_cast<std::uintptr_t>(renderInfo)),
+        reinterpret_cast<void*>(static_cast<std::uintptr_t>(ride)),
+        reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)));
+    using UpdFn = void(__thiscall*)(void*);
+    reinterpret_cast<UpdFn>(static_cast<std::uintptr_t>(0x634800))(
+        reinterpret_cast<void*>(static_cast<std::uintptr_t>(renderInfo)));
+    NFC_INFO("render: car %08X now shows type %u (ride %08X)", car, typeId, ride);
 }
 
 void CarRenderer::restorePuppets() {
