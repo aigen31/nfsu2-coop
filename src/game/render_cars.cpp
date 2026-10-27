@@ -405,6 +405,8 @@ void reloadPuppetModel(int slot, u32 car, u32 wantedModel) {
     if (!readMem(car, &root, sizeof(root)) || !root) return;
     using ReloadFn = void(__thiscall*)(void*, std::uint32_t);
     reinterpret_cast<ReloadFn>(kReloadModelVa)(reinterpret_cast<void*>(static_cast<std::uintptr_t>(root)), model);
+    g_reloadedCar[slot] = car;
+    g_reloadedModel[slot] = model;  // one attempt per car/model, no per-frame churn
     NFC_INFO("render: rebuilt car %08X root %08X with model %08X (%s), desc was '%s'", car, root, model, want, descNameOf(car).c_str());
 }
 
