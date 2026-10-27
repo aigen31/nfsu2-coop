@@ -440,6 +440,43 @@ bool Bridge::start(std::uint16_t port) {
         return r;
     });
 
+    // Build a RideInfo for a type that is not loaded yet (RideInfo_Init @ 0x610270) and give
+    // it to the car's render object (CarRenderInfo_ctor @ 0x638190 + UpdateCarParts @ 0x634800).
+    // This is the path that makes the engine stream the model of that type.
+    g_server.Register("car.applyNewType", [](const coopbridge::json::Value& p) {
+        static std::uint8_t ride[0x2000];
+        const std::uint32_t slot = static_cast<std::uint32_t>(p.get("slot").asInt(1));
+        const int typeId = static_cast<int>(p.get("type").asInt(0));
+        std::uint32_t car = 0;
+        if (!readMem(0x89CCF8 + slot * 4, &car, sizeof(car)) || !car)
+            throw coopbridge::Error(-32013, "no car in that slot");
+        std::memset(ride, 0, sizeof(ride));
+        using InitFn = void(__thiscall*)(void*, int, int, int, int);
+        reinterpret_cast<InitFn>(static_cast<std::uintptr_t>(0x610270))(
+            ride, typeId, 0, 1, 1);
+        std::uint32_t renderInfo = 0;
+        if (!readMem(car + 0x554, &renderInfo, sizeof(renderInfo)) || !renderInfo)
+            throw coopbridge::Error(-32017, "no render info");
+        using CtorFn = void*(__thiscall*)(void*, void*, void*);
+        reinterpret_cast<CtorFn>(static_cast<std::uintptr_t>(0x638190))(
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(renderInfo)),
+            static_cast<void*>(ride),
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)));
+        using UpdFn = void(__thiscall*)(void*);
+        reinterpret_cast<UpdFn>(static_cast<std::uintptr_t>(0x634800))(
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(renderInfo)));
+        auto r = coopbridge::json::Value::object();
+        r.set("car", static_cast<std::int64_t>(car));
+        r.set("type", static_cast<std::int64_t>(typeId));
+        r.set("rideType", static_cast<std::int64_t>(*reinterpret_cast<std::uint32_t*>(ride)));
+        std::uint32_t d = 0, np = 0;
+        if (readMem(car + 0x554, &d, sizeof(d)) && d && readMem(d + 0x08, &np, sizeof(np)) && np) {
+            char nm[32] = {};
+            if (readMem(np, nm, sizeof(nm) - 1)) r.set("descName", std::string(nm));
+        }
+        return r;
+    });
+
     g_server.Register("car.slots", [](const coopbridge::json::Value&) { return slotList(); });
     g_server.Register("car.name", [](const coopbridge::json::Value& p) {
         std::uint32_t car = static_cast<std::uint32_t>(p.get("car").asInt());
