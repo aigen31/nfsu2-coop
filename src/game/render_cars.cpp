@@ -269,7 +269,55 @@ void __thiscall detourBuild(void* car, std::uint32_t model) {
     if (g_origBuild) g_origBuild(car, model);
 }
 
+// CarRenderInfo_ctor(CarRenderInfo, RideInfo, Car) @ 0x638190: the second argument is the
+// car's RideInfo (RideInfo[0] = CarTypeID). Hooking it tells us each car's RideInfo, which
+// is what a model change has to edit.
+using CtorFn = void*(__thiscall*)(void*, void*, void*);
+CtorFn g_origCtor = nullptr;
+struct CarRide {
+    u32 car;
+    u32 ride;
+};
+CarRide g_carRides[64];
+volatile long g_carRideCount = 0;
+
+void* __thiscall detourCtor(void* self, void* ride, void* car) {
+    const u32 selfP = static_cast<u32>(reinterpret_cast<std::uintptr_t>(self));
+    const u32 rideP = static_cast<u32>(reinterpret_cast<std::uintptr_t>(ride));
+    const u32 carP = static_cast<u32>(reinterpret_cast<std::uintptr_t>(car));
+    static volatile long calls = 0;
+    const long n = InterlockedIncrement(&calls);
+    if (n <= 64) NFC_INFO("render: ctor #%ld self %08X ride %08X car %08X", n, selfP, rideP, carP);
+    bool known = false;
+    for (long i = 0; i < g_carRideCount && i < 64; ++i)
+        if (g_carRides[i].car == carP) {
+            g_carRides[i].ride = rideP;
+            known = true;
+            break;
+        }
+    if (!known && g_carRideCount < 64) {
+        g_carRides[g_carRideCount].car = carP;
+        g_carRides[g_carRideCount].ride = rideP;
+        InterlockedIncrement(&g_carRideCount);
+    }
+    return g_origCtor ? g_origCtor(self, ride, car) : self;
+}
+
+u32 rideInfoOfCar(u32 car) {
+    for (long i = 0; i < g_carRideCount && i < 64; ++i)
+        if (g_carRides[i].car == car) return g_carRides[i].ride;
+    return 0;
+}
+
+u32 CarRenderer::rideInfoOf(u32 car) const { return rideInfoOfCar(car); }
+
 bool CarRenderer::install(u32 renderVa, bool modelSwap) {
+    if (MH_CreateHook(reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(0x00638190)),
+                      reinterpret_cast<LPVOID>(&detourCtor), reinterpret_cast<LPVOID*>(&g_origCtor)) == MH_OK &&
+        MH_EnableHook(reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(0x00638190))) == MH_OK)
+        NFC_INFO("render: car render ctor hooked");
+    else
+        NFC_WARN("render: car render ctor hook failed");
     if (MH_CreateHook(reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(0x0063A5A0)),
                       reinterpret_cast<LPVOID>(&detourBuild), reinterpret_cast<LPVOID*>(&g_origBuild)) == MH_OK &&
         MH_EnableHook(reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(0x0063A5A0))) == MH_OK)

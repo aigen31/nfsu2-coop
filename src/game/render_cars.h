@@ -26,6 +26,7 @@ public:
     static CarRenderer& instance();
 
     bool install(u32 renderVa, bool modelSwap = false);
+    u32 rideInfoOf(u32 car) const;
     void shutdown();
     bool ready() const { return installed_; }
 

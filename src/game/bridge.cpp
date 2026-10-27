@@ -1,5 +1,7 @@
 #include "bridge.h"
 
+#include "render_cars.h"
+
 #include <windows.h>
 
 #include <coopbridge/server.h>
@@ -355,6 +357,81 @@ bool Bridge::start(std::uint16_t port) {
         r.set("car", static_cast<std::int64_t>(car));
         r.set("oldType", static_cast<std::int64_t>(oldType));
         r.set("type", static_cast<std::int64_t>(infoPtr));
+        std::uint32_t d = 0, np = 0;
+        if (readMem(car + 0x554, &d, sizeof(d)) && d && readMem(d + 0x08, &np, sizeof(np)) && np) {
+            char nm[32] = {};
+            if (readMem(np, nm, sizeof(nm) - 1)) r.set("descName", std::string(nm));
+        }
+        return r;
+    });
+
+    // Change the car's CarTypeID in its RideInfo (RideInfo[0]) and rebuild the parts with
+    // CarRenderInfo_UpdateCarParts @ 0x634800.
+    g_server.Register("car.setRideType", [](const coopbridge::json::Value& p) {
+        const std::uint32_t slot = static_cast<std::uint32_t>(p.get("slot").asInt(1));
+        const int typeId = static_cast<int>(p.get("type").asInt(0));
+        std::uint32_t car = 0;
+        if (!readMem(0x89CCF8 + slot * 4, &car, sizeof(car)) || !car)
+            throw coopbridge::Error(-32013, "no car in that slot");
+        const std::uint32_t ride = CarRenderer::instance().rideInfoOf(car);
+        if (!ride) throw coopbridge::Error(-32019, "ride info unknown for that car");
+        std::uint32_t oldType = 0;
+        readMem(ride, &oldType, sizeof(oldType));
+        const std::uint32_t want = static_cast<std::uint32_t>(typeId);
+        writeMem(ride, &want, sizeof(want));
+        std::uint32_t renderInfo = 0;
+        readMem(car + 0x554, &renderInfo, sizeof(renderInfo));
+        if (renderInfo) {
+            using UpdFn = void(__thiscall*)(void*);
+            reinterpret_cast<UpdFn>(static_cast<std::uintptr_t>(0x634800))(
+                reinterpret_cast<void*>(static_cast<std::uintptr_t>(renderInfo)));
+        }
+        auto r = coopbridge::json::Value::object();
+        r.set("car", static_cast<std::int64_t>(car));
+        r.set("ride", static_cast<std::int64_t>(ride));
+        r.set("oldType", static_cast<std::int64_t>(oldType));
+        r.set("type", static_cast<std::int64_t>(want));
+        std::uint32_t d = 0, np = 0;
+        if (readMem(car + 0x554, &d, sizeof(d)) && d && readMem(d + 0x08, &np, sizeof(np)) && np) {
+            char nm[32] = {};
+            if (readMem(np, nm, sizeof(nm) - 1)) r.set("descName", std::string(nm));
+        }
+        return r;
+    });
+
+    // The per-type RideInfo objects live in .data at 0x890170 + n*0x940; their first dword
+    // is the CarTypeID. Build a car's render object again from the RideInfo of the wanted
+    // type (CarRenderInfo_ctor @ 0x638190) and refresh its parts (0x634800).
+    g_server.Register("car.applyType", [](const coopbridge::json::Value& p) {
+        const std::uint32_t slot = static_cast<std::uint32_t>(p.get("slot").asInt(1));
+        const std::uint32_t typeId = static_cast<std::uint32_t>(p.get("type").asInt(0));
+        std::uint32_t car = 0;
+        if (!readMem(0x89CCF8 + slot * 4, &car, sizeof(car)) || !car)
+            throw coopbridge::Error(-32013, "no car in that slot");
+        std::uint32_t ride = 0;
+        for (std::uint32_t n = 0; n < 64 && !ride; ++n) {
+            std::uint32_t entry = 0x00890170u + n * 0x940u;
+            std::uint32_t id = 0, info = 0;
+            if (!readMem(entry, &id, sizeof(id))) break;
+            if (!readMem(entry + 0x04, &info, sizeof(info))) continue;  // must look like a RideInfo
+            if (id == typeId && info) ride = entry;
+        }
+        if (!ride) throw coopbridge::Error(-32020, "no ride info for that type");
+        std::uint32_t renderInfo = 0;
+        if (!readMem(car + 0x554, &renderInfo, sizeof(renderInfo)) || !renderInfo)
+            throw coopbridge::Error(-32017, "no render info");
+        using CtorFn = void*(__thiscall*)(void*, void*, void*);
+        reinterpret_cast<CtorFn>(static_cast<std::uintptr_t>(0x638190))(
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(renderInfo)),
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(ride)),
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(car)));
+        using UpdFn = void(__thiscall*)(void*);
+        reinterpret_cast<UpdFn>(static_cast<std::uintptr_t>(0x634800))(
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(renderInfo)));
+        auto r = coopbridge::json::Value::object();
+        r.set("car", static_cast<std::int64_t>(car));
+        r.set("ride", static_cast<std::int64_t>(ride));
+        r.set("type", static_cast<std::int64_t>(typeId));
         std::uint32_t d = 0, np = 0;
         if (readMem(car + 0x554, &d, sizeof(d)) && d && readMem(d + 0x08, &np, sizeof(np)) && np) {
             char nm[32] = {};
