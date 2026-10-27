@@ -9,6 +9,9 @@
 | [th0mk/nfsu2-web](https://github.com/th0mk/nfsu2-web) | Браузерный порт игры (x86 → C, WebGPU) **с работающим мультиплеером**: свободная езда и Online-режим до 6 игроков, экипажи, комнаты, режим призрака, гонки. Ближайший существующий ответ на «кооп в свободной езде». Читать: `discord-bot/knowledge.md`, `docs/web/PLAYING.md`, `docs/web/DESIGN.md`. |
 | [codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled) | Статическая рекомпиляция `SPEED2.EXE` в C (pcrecomp). По этому C можно искать логику создания машины и менеджер трафика вместо ручного реверса. |
 | [nlgxzef/NFSU2Unlimiter](https://github.com/nlgxzef/NFSU2Unlimiter) | Моддинг-SDK: ~100 заголовков с реверс-структурами и адресами функций. Именно оттуда имена полей для наших смещений. |
+
+| [RadekBledowski/NFSU2Unlimiter](https://github.com/RadekBledowski/NFSU2Unlimiter) | Форк SDK: те же 109 заголовков, мелкие исправления (`Game.h` — цикл стоковых гонщиков, `GetCarTypeLogoHash`; в `CarRenderInfo.h` +7 строк). |
+| [chrystianfarias/FRSFastTest](https://github.com/chrystianfarias/FRSFastTest) | ASI-плагин: **грузит игру сразу в свободную езду** (без интро, «press Enter» и меню), карьера из сейва или dev-SkipFE. Собран под нашу сборку MinGW и установлен в оба экземпляра. В исходнике описан весь путь загрузки: `0x4D9580` (boot-таблица), `0x495A30` (Career > Resume), `0x5404A0` (TheRaceParameters, трек 4000 = город), dev-флаг `[0x864FAC]`. |
 | [yugecin/nfsu2-re](https://github.com/yugecin/nfsu2-re) | Ранняя реимплементация + `SPEED2.CT` (таблица Cheat Engine). |
 
 ## Что уже даёт SDK (адреса проверены на нашей сборке)
