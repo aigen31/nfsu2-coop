@@ -191,9 +191,26 @@ void applyPuppet(int slot, const PuppetTarget& t, u32 ri) {
     const f32 c = std::cos(t.yaw), sn = std::sin(t.yaw);
     f32 nb[12] = {c, -sn, 0, 0, sn, c, 0, 0, 0, 0, 1, 0};
 
+    // Full pose, the way nfsu2-web drives a remote car (references/nfsu2-web/runtime/roam.c):
+    // position +0x60, velocity +0x70, orientation rows +0x90 forward / +0xA0 left / +0xB0 up,
+    // heading +0x40C (u16 turns), speed +0x42C/+0x430. +0x50 is kept for our old readers.
+    f32 pos60[3] = {t.pos.x, t.pos.y, t.pos.z};
+    f32 left[4] = {-sn, c, 0, 0};
+    f32 up[4] = {0, 0, 1, 0};
+    f32 fwd[4] = {c, sn, 0, 0};
+    f32 vel[3] = {fwd[0] * t.speed, fwd[1] * t.speed, 0.0f};
+    const u16 heading = static_cast<u16>((t.yaw / 6.28318530718f) * 65536.0f);
+    const f32 speed = t.speed;
+
     writeMem(t.carPointer + 0x50, np, sizeof(np));
-    writeMem(t.carPointer + 0x60, np2, sizeof(np2));
-    writeMem(t.carPointer + 0x90, nb, sizeof(nb));
+    writeMem(t.carPointer + 0x60, pos60, sizeof(pos60));
+    writeMem(t.carPointer + 0x70, vel, sizeof(vel));
+    writeMem(t.carPointer + 0x90, fwd, sizeof(fwd));
+    writeMem(t.carPointer + 0xA0, left, sizeof(left));
+    writeMem(t.carPointer + 0xB0, up, sizeof(up));
+    writeMem(t.carPointer + 0x40C, &heading, sizeof(heading));
+    writeMem(t.carPointer + 0x42C, &speed, sizeof(speed));
+    writeMem(t.carPointer + 0x430, &speed, sizeof(speed));
 }
 
 void onRender(void* self) {

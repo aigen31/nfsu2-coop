@@ -19,6 +19,7 @@ struct PuppetTarget {
     u32 carPointer = 0;  // borrowed car object (the game's own)
     Vec3 pos;            // remote player's position
     float yaw = 0;       // radians, world Z is up
+    float speed = 0;     // m/s, for the remote car's velocity/speed fields
 };
 
 class CarRenderer {

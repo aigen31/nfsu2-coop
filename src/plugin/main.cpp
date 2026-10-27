@@ -164,6 +164,7 @@ void updateRenderTargets() {
                 t.model = w->players[i].model;
                 t.pos = e->st.pos;
                 t.yaw = e->st.yaw;
+                t.speed = e->st.vel.x * std::sin(e->st.yaw) + e->st.vel.y * std::cos(e->st.yaw);
                 puppets.push_back(t);
             }
             ++slot;
